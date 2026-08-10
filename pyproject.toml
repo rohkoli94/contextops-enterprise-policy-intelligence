@@ -1,0 +1,13 @@
+[project]
+name = "contextops-enterprise-policy-intelligence"
+version = "0.1.0"
+description = "Enterprise Policy Intelligence Platform powered by multimodal RAG"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.141.1",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.2",
+    "streamlit>=1.61.1",
+    "uvicorn>=0.52.1",
+]
