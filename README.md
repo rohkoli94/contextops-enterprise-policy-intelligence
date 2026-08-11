@@ -19,21 +19,40 @@ Day 1 establishes the project foundation:
 
 ## Current Architecture
 
-┌─────────────────┐
-│    Streamlit    │
-│       UI        │
-│    :8501        │
-└─────────────────┘
-        │
-        │
-    NOT YET
+```text
+Streamlit UI : 8501
         │
         ▼
-┌─────────────────┐
-│     FastAPI     │
-│      API        │
-│    :8000        │
-└─────────────────┘
+FastAPI : 8000
         │
         ▼
 GET /api/v1/health
+
+
+## Day 2 — Configuration & Environment Management
+
+Day 2 introduces centralized application configuration and environment
+management.
+
+### What was added
+
+- Pydantic Settings for typed application configuration
+- Environment variable support
+- Local `.env` support for development
+- `.env.example` for documenting required configuration
+- FastAPI application metadata loaded from configuration
+- `.env` excluded from Git
+
+### Configuration Flow
+
+```text
+.env / Environment Variables
+            │
+            ▼
+    Pydantic Settings
+            │
+            ▼
+       Application
+            │
+            ▼
+         FastAPI
