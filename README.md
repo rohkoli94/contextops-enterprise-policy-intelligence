@@ -27,7 +27,7 @@ FastAPI : 8000
         │
         ▼
 GET /api/v1/health
-
+```
 
 ## Day 2 — Configuration & Environment Management
 
@@ -56,3 +56,46 @@ management.
             │
             ▼
          FastAPI
+```
+
+## Day 3 — Versioned Query API & Logging
+
+Added the first versioned query API for ContextOps.
+
+### Added
+
+- `POST /api/v1/query`
+- Feature-based API structure
+- Separate request and response schemas
+- Pydantic request validation
+- Swagger/OpenAPI documentation
+- Centralized logging
+- Logging abstraction with `get_logger()`
+- Sensitive query content is not logged
+
+### API Flow
+
+```text
+Streamlit UI
+  ↓
+FastAPI
+  ↓
+POST /api/v1/query
+  ↓
+Request Validation
+  ↓
+query_policy()
+  ↓
+QueryResponse
+```
+
+### Current Endpoints
+
+- `GET /api/v1/health`
+- `POST /api/v1/query`
+
+### Status
+
+- Day 1 — Project Foundation ✅
+- Day 2 — Configuration & Environment Management ✅
+- Day 3 — Versioned Query API & Logging ✅
