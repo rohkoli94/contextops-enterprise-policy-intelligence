@@ -94,8 +94,34 @@ QueryResponse
 - `GET /api/v1/health`
 - `POST /api/v1/query`
 
+
+## Day 4 — Streamlit UI Integration
+
+Added a Streamlit interface and connected it to the ContextOps FastAPI backend.
+
+### Added
+
+- Streamlit query interface
+- User input validation
+- FastAPI integration using HTTP
+- API error handling
+- Configurable backend API URL
+
+### Flow
+
+```text
+Streamlit UI
+    ↓
+FastAPI Query API
+    ↓
+QueryResponse
+    ↓
+Display Answer
+```
+
 ### Status
 
 - Day 1 — Project Foundation ✅
 - Day 2 — Configuration & Environment Management ✅
 - Day 3 — Versioned Query API & Logging ✅
+- Day 4 — Streamlit UI Integration ✅

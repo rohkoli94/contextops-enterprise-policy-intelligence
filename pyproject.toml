@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.2",
+    "requests>=2.34.2",
     "streamlit>=1.61.1",
     "uvicorn>=0.52.1",
 ]
