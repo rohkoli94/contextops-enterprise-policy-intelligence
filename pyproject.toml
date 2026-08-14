@@ -5,6 +5,8 @@ description = "Enterprise Policy Intelligence Platform powered by multimodal RAG
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "azure-ai-projects>=2.0.0",
+    "azure-identity>=1.25.3",
     "fastapi>=0.141.1",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.15.0",

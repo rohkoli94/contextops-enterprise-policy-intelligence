@@ -119,9 +119,41 @@ QueryResponse
 Display Answer
 ```
 
+## Day 5 — LLM Provider Integration
+
+Implemented a provider-based LLM integration architecture for ContextOps.
+
+### Architecture
+
+Streamlit → FastAPI → QueryService → LLMProvider → MicrosoftFoundryProvider → Microsoft Foundry
+
+### Changes
+
+- Added `LLMProvider` abstract contract
+- Added provider-neutral `LLMRequest` and `LLMResponse`
+- Added `MicrosoftFoundryProvider`
+- Added `QueryService`
+- Connected the query API to the LLM service
+- Added Microsoft Foundry configuration
+- Replaced the hardcoded query response with an LLM integration flow
+
+### Provider Abstraction
+
+The application service depends on the `LLMProvider` contract rather than a specific LLM provider, allowing alternative providers to be introduced without changing `QueryService`.
+
+```text
+providers/
+└── llm/
+    ├── base.py
+    └── microsoft_foundry.py
+
+services/
+└── query_service.py
+
 ### Status
 
 - Day 1 — Project Foundation ✅
 - Day 2 — Configuration & Environment Management ✅
 - Day 3 — Versioned Query API & Logging ✅
 - Day 4 — Streamlit UI Integration ✅
+- Day 5 — LLM Provider Abstraction & Microsoft Foundry Integration ✅

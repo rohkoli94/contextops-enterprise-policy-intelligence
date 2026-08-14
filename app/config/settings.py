@@ -5,7 +5,13 @@ class Settings(BaseSettings):
     app_name: str = "ContextOps"
     app_version: str = "0.1.0"
     environment: str = "development"
+
+    #FAST API
     api_base_url: str = "http://127.0.0.1:8080"
+
+    #Microsoft foundary
+    foundry_project_endpoint: str
+    foundry_model_name: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
