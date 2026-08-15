@@ -150,6 +150,37 @@ providers/
 services/
 └── query_service.py
 
+## Day 6 — Multimodal Document Domain & Versioning Foundation
+
+Implemented the core domain foundation for multimodal document processing in ContextOps.
+
+### Changes
+
+- Added `Document` domain model
+- Added `DocumentElement` domain model
+- Added `ContentType` support for:
+  - Text
+  - Tables
+  - Images
+  - Charts
+  - Diagrams
+- Added document versioning fields
+- Added page-level element tracking
+- Added document and element content hashes
+- Added reusable SHA-256 content hashing for both text and binary content
+
+### Architecture
+
+```text
+Document
+   ↓
+DocumentElement
+   ├── Text
+   ├── Table
+   ├── Image
+   ├── Chart
+   └── Diagram
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -157,3 +188,4 @@ services/
 - Day 3 — Versioned Query API & Logging ✅
 - Day 4 — Streamlit UI Integration ✅
 - Day 5 — LLM Provider Abstraction & Microsoft Foundry Integration ✅
+- Day 6 — Multimodal Document Domain & Versioning Foundation ✅
