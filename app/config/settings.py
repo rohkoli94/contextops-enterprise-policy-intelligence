@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     foundry_project_endpoint: str
     foundry_model_name: str
 
+    # Azure Blob Storage
+    azure_storage_connection_string: str
+    azure_storage_container_name: str = "contextops-documents"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

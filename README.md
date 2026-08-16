@@ -149,6 +149,7 @@ providers/
 
 services/
 └── query_service.py
+```
 
 ## Day 6 — Multimodal Document Domain & Versioning Foundation
 
@@ -180,6 +181,38 @@ DocumentElement
    ├── Image
    ├── Chart
    └── Diagram
+```
+
+## Day 7 — Document Storage Foundation
+
+Implemented the storage foundation for enterprise document ingestion.
+
+### Changes
+
+- Added `StorageProvider` abstraction
+- Added `AzureBlobStorageProvider`
+- Added Azure Blob Storage configuration
+- Added `azure-storage-blob` dependency
+- Configured streaming-based file upload support using `BinaryIO`
+- Designed the storage layer to support large file uploads without loading the entire file into application memory
+- Kept storage implementation decoupled from business logic through a provider abstraction
+
+### Architecture
+
+```text
+StorageProvider
+       △
+       │
+AzureBlobStorageProvider
+       ↓
+BlobServiceClient
+       ↓
+ContainerClient
+       ↓
+BlobClient
+       ↓
+Azure Blob Storage
+```
 
 ### Status
 
@@ -189,3 +222,4 @@ DocumentElement
 - Day 4 — Streamlit UI Integration ✅
 - Day 5 — LLM Provider Abstraction & Microsoft Foundry Integration ✅
 - Day 6 — Multimodal Document Domain & Versioning Foundation ✅
+- Day 7 — Document Storage Foundation ✅
