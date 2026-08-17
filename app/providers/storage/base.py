@@ -13,3 +13,9 @@ class StorageProvider(ABC):
     ) -> str:
         """Upload content from a stream and return its storage path."""
         raise NotImplementedError
+
+
+    @abstractmethod
+    def delete(self, path: str) -> None:
+        """Delete content from storage."""
+        raise NotImplementedError

@@ -214,6 +214,38 @@ BlobClient
 Azure Blob Storage
 ```
 
+## Day 8 — Document Upload API & Persistence
+
+Implemented the first end-to-end document upload workflow.
+
+### Changes
+- Added POST /api/v1/documents
+- Added document upload with file, document name, categories and tags
+- Added DocumentService
+- Added Document and DocumentVersion persistence
+- Added category and tag relationships
+- Added chunk-based file hashing and size calculation
+- Added Azure Blob Storage upload
+- Added database transaction handling and Blob cleanup on failure
+- Connected Streamlit document upload UI to FastAPI
+- Added support for uploads up to 1 GB
+
+### Architecture
+
+```text
+Streamlit UI
+    ↓
+POST /api/v1/documents
+    ↓
+Document Router
+    ↓
+DocumentService
+    ├── PostgreSQL
+    └── Azure Blob Storage
+    ↓
+DocumentUploadResponse
+```
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -223,3 +255,4 @@ Azure Blob Storage
 - Day 5 — LLM Provider Abstraction & Microsoft Foundry Integration ✅
 - Day 6 — Multimodal Document Domain & Versioning Foundation ✅
 - Day 7 — Document Storage Foundation ✅
+- Day 8 — Document Upload API & Persistence ✅

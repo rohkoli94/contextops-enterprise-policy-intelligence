@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str
     azure_storage_container_name: str = "contextops-documents"
 
+    # PostgreSQL
+    database_url: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -35,3 +35,12 @@ class AzureBlobStorageProvider(StorageProvider):
         )
 
         return path
+
+    def delete(
+            self,
+            path: str
+        ) -> None:
+            blob_client = self.container_client.get_blob_client(path)
+    
+            blob_client.delete_blob()
+    
