@@ -246,6 +246,31 @@ DocumentService
 DocumentUploadResponse
 ```
 
+## Day 9 — Document Management & Version Updates
+
+### Changes
+
+- Added active document listing with categories and tags
+- Added document version upload
+- Added version update option in Streamlit
+- Active document list refreshes after upload/update
+
+### Flow
+
+```text
+Streamlit
+   ↓
+Documents Router
+   ↓
+DocumentService
+   ↓
+Database
+```
+
+## APIs
+- GET /api/v1/documents
+- POST /api/v1/documents/{document_id}/versions
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -256,3 +281,4 @@ DocumentUploadResponse
 - Day 6 — Multimodal Document Domain & Versioning Foundation ✅
 - Day 7 — Document Storage Foundation ✅
 - Day 8 — Document Upload API & Persistence ✅
+- Day 9 — Document Management & Version Updates ✅

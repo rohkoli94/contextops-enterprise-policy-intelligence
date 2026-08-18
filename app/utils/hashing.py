@@ -20,6 +20,10 @@ def calculate_stream_hash(
         hasher.update(chunk)
         file_size += len(chunk)
 
-    stream.seek(0)
-
+    stream.seek(0) 
+    """ stream.seek(0) -> reset sthe stream position after reading, otherwise Azure upload may receive the stream at the end.
+    [ Start -------------------- End ]
+        ↑
+        stream position reset
+    """
     return hasher.hexdigest(), file_size
