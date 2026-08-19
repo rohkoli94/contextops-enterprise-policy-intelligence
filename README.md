@@ -271,6 +271,41 @@ Database
 - GET /api/v1/documents
 - POST /api/v1/documents/{document_id}/versions
 
+
+## Day 10 — RAG Document Extraction Foundation
+- Added DocumentExtractor abstraction
+- Added DoclingDocumentExtractor
+- Added Docling for structured document parsing
+- Converts extracted content into DocumentElement
+- Preserves document ID and page number
+- Uses chunked copying to avoid loading the entire document into RAM
+- Temporary file suffix is dynamically derived from the file name
+- Temporary files are cleaned up after processing
+
+```
+Document Stream
+      │
+      ▼
+DoclingDocumentExtractor
+      │
+      ▼
+Copy to Temporary File
+(1 MB buffer at a time)
+      │
+      ▼
+Docling DocumentConverter
+      │
+      ▼
+Structured Document
+      │
+      ▼
+Extract Text Items
+      │
+      ▼
+DocumentElement[]
+
+```
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -282,3 +317,4 @@ Database
 - Day 7 — Document Storage Foundation ✅
 - Day 8 — Document Upload API & Persistence ✅
 - Day 9 — Document Management & Version Updates ✅
+- Day 10 — RAG Document Extraction Foundation ✅
