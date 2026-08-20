@@ -306,6 +306,54 @@ DocumentElement[]
 
 ```
 
+# ContextOps
+
+Enterprise Policy Intelligence Platform for multimodal RAG.
+
+## Day 10 - Multimodal Document Extraction
+
+Implemented the document ingestion and extraction pipeline.
+
+### Current Flow
+
+```text
+POST /documents
+        |
+        v
+DocumentService
+        |
+        v
+Blob Storage
+        |
+        v
+DocumentIngestionService
+        |
+        v
+DoclingDocumentExtractor
+        |
+        +-- TEXT
+        |
+        +-- TABLE
+        |
+        +-- IMAGE
+              |
+              v
+      Vision-capable LLM
+              |
+              v
+   IMAGE / CHART / DIAGRAM
+        |
+        v
+DocumentElement
+```
+
+## Supported Content
+- Text
+- Tables
+- Images
+- Charts
+- Diagrams
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -318,3 +366,4 @@ DocumentElement[]
 - Day 8 — Document Upload API & Persistence ✅
 - Day 9 — Document Management & Version Updates ✅
 - Day 10 — RAG Document Extraction Foundation ✅
+--Day 11 - Multimodal Document Extraction ✅

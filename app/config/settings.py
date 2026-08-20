@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     #Microsoft foundary
     foundry_project_endpoint: str
     foundry_model_name: str
+    foundry_vision_model_name: str
 
     # Azure Blob Storage
     azure_storage_connection_string: str

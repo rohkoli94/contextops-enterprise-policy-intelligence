@@ -9,6 +9,13 @@ class LLMRequest:
     context: str | None = None
 
 @dataclass
+class VisionRequest:
+    system_prompt: str
+    user_prompt: str
+    image_bytes: bytes
+    media_type: str
+
+@dataclass
 class LLMResponse:
     content: str
     model: str
@@ -20,3 +27,10 @@ class LLMProvider(ABC):
         """Genarate response from LLM"""
         raise NotImplementedError
 
+    @abstractmethod
+    def generate_vision(
+        self,
+        request: VisionRequest,
+    ) -> LLMResponse:
+        """Generate a response from a vision-capable LLM."""
+        raise NotImplementedError
