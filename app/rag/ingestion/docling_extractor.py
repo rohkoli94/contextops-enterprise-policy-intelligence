@@ -57,6 +57,7 @@ class DoclingDocumentExtractor(DocumentExtractor):
         document: Document,
         stream: BinaryIO,
         file_name: str,
+        document_version_id: uuid
     ) -> list[DocumentElement]:
         """
         Main document extraction flow.
@@ -134,6 +135,7 @@ class DoclingDocumentExtractor(DocumentExtractor):
 
                 # Add only successfully extracted elements.
                 if element is not None:
+                    element.document_version_id = document_version_id
                     elements.append(element)
 
             return elements

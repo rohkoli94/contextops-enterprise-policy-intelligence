@@ -310,7 +310,7 @@ DocumentElement[]
 
 Enterprise Policy Intelligence Platform for multimodal RAG.
 
-## Day 10 - Multimodal Document Extraction
+## Day 11 - Multimodal Document Extraction
 
 Implemented the document ingestion and extraction pipeline.
 
@@ -354,6 +354,37 @@ DocumentElement
 - Charts
 - Diagrams
 
+
+## Day 12 — Hybrid Chunking
+
+Implemented content-type-aware hybrid chunking.
+
+### Changes
+
+- Added `DocumentChunk` domain model
+- Added structure-aware grouping
+- Added content-type-specific chunking
+- Added tokenizer-aware size constraints
+- Added text semantic splitting
+- Added table row/column-aware splitting
+- Added visual description chunking
+- Preserved document/version/element lineage
+- Added chunk ordering and content hashing
+
+### Flow
+
+```text
+DocumentElement[]
+        ↓
+Structure-aware grouping
+        ↓
+Content-type strategy
+        ↓
+Token-aware refinement
+        ↓
+DocumentChunk[]
+```
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -366,4 +397,4 @@ DocumentElement
 - Day 8 — Document Upload API & Persistence ✅
 - Day 9 — Document Management & Version Updates ✅
 - Day 10 — RAG Document Extraction Foundation ✅
---Day 11 - Multimodal Document Extraction ✅
+- Day 11 - Multimodal Document Extraction ✅

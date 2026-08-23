@@ -268,6 +268,7 @@ class DocumentService:
                 document=document,
                 blob_path=stored_blob_path,
                 file_name=file_name,
+                document_version_id=document_version_id
             )
 
             return DocumentUploadResponse(

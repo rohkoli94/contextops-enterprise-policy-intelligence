@@ -1,3 +1,4 @@
+import uuid
 from app.domain.document import Document
 from app.domain.document_element import DocumentElement
 from app.providers.storage.base import StorageProvider
@@ -40,6 +41,7 @@ class DocumentIngestionService:
         document: Document,
         blob_path: str,
         file_name: str,
+        document_version_id: uuid
     ) -> list[DocumentElement]:
         """
         Read the persisted document from storage and extract
@@ -55,6 +57,7 @@ class DocumentIngestionService:
                 document=document,
                 stream=stream,
                 file_name=file_name,
+                document_version_id=document_version_id
             )
 
         finally:
