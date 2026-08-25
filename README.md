@@ -306,10 +306,6 @@ DocumentElement[]
 
 ```
 
-# ContextOps
-
-Enterprise Policy Intelligence Platform for multimodal RAG.
-
 ## Day 11 - Multimodal Document Extraction
 
 Implemented the document ingestion and extraction pipeline.
@@ -385,6 +381,47 @@ Token-aware refinement
 DocumentChunk[]
 ```
 
+## Day 13 — Embeddings
+- Added EmbeddingProvider abstraction.
+- Added Microsoft Foundry embedding provider.
+- Added single and batch embedding support.
+- Added safe batching by input count and token limits.
+- Added response-count validation.
+- Added TiktokenCounter abstraction and implementation.
+- Wired the same tokenizer into chunking and embedding.
+- Separated model name from Foundry deployment name.
+- Connected DocumentIngestionService:
+
+```text
+DocumentElement[]
+        ↓
+HybridDocumentChunker
+        ↓
+DocumentChunk[]
+        ↓
+EmbeddingProvider
+        ↓
+MicrosoftFoundryEmbeddingProvider
+        ↓
+Batch Embeddings
+        ↓
+EmbeddedDocumentChunk[]
+```
+
+### Key design
+
+```text
+                 TiktokenCounter
+                      │
+             ┌────────┴────────┐
+             ↓                 ↓
+      HybridChunker      EmbeddingProvider
+             │                 │
+             └────────┬────────┘
+                      ↓
+          DocumentIngestionService
+```
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -398,3 +435,5 @@ DocumentChunk[]
 - Day 9 — Document Management & Version Updates ✅
 - Day 10 — RAG Document Extraction Foundation ✅
 - Day 11 - Multimodal Document Extraction ✅
+- Day 12 — Hybrid Chunking ✅
+- Day 13 — Embeddings ✅

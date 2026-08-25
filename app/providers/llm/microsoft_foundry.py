@@ -4,10 +4,22 @@ from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
 
 from app.config.settings import settings
-from app.providers.llm.base import LLMProvider, LLMRequest, LLMResponse, VisionRequest
+from app.providers.llm.base import (
+    LLMProvider,
+    LLMRequest,
+    LLMResponse,
+    VisionRequest,
+)
 
 
 class MicrosoftFoundryProvider(LLMProvider):
+    """
+    Microsoft Foundry provider for:
+
+    - normal LLM generation
+    - vision generation
+    """
+
     def __init__(self) -> None:
         self.credential = DefaultAzureCredential()
 
@@ -16,9 +28,18 @@ class MicrosoftFoundryProvider(LLMProvider):
             credential=self.credential,
         )
 
-        self.openai_client = self.project_client.get_openai_client()
+        self.openai_client = (
+            self.project_client.get_openai_client()
+        )
 
-    def generate(self, request: LLMRequest) -> LLMResponse:
+    def generate(
+        self,
+        request: LLMRequest,
+    ) -> LLMResponse:
+        """
+        Generate a response using the configured LLM deployment.
+        """
+
         input_text = request.user_prompt
 
         if request.context:
@@ -28,42 +49,52 @@ class MicrosoftFoundryProvider(LLMProvider):
             )
 
         response = self.openai_client.responses.create(
-            model=settings.foundry_model_name,
+            # Actual Foundry deployment name.
+            model=settings.foundry_model_deployment_name,
             instructions=request.system_prompt,
             input=input_text,
         )
 
         return LLMResponse(
             content=response.output_text,
+
+            # Logical model name.
             model=settings.foundry_model_name,
+
             provider="microsoft_foundry",
         )
-
 
     def generate_vision(
         self,
         request: VisionRequest,
     ) -> LLMResponse:
         """
-        Generate a response using a vision-capable model.
+        Generate a response using the configured vision deployment.
 
         The extracted image bytes are converted into a Base64
-        data URL before being sent to Microsoft Foundry.
+        data URL and sent as image input.
         """
 
-        # Convert image bytes into Base64 text.
+        # Convert image bytes to Base64.
         encoded_image = base64.b64encode(
             request.image_bytes
         ).decode("utf-8")
 
-        # Build a data URL understood as image input.
+        # Example:
+        #
+        # data:image/png;base64,<encoded-image>
+        #
+        # media_type is dynamic and comes from VisionRequest.
         image_data_url = (
             f"data:{request.media_type};base64,"
             f"{encoded_image}"
         )
 
         response = self.openai_client.responses.create(
-            model=settings.foundry_vision_model_name,
+            # Actual Foundry vision deployment name.
+            model=(
+                settings.foundry_vision_model_deployment_name
+            ),
             instructions=request.system_prompt,
             input=[
                 {
@@ -84,6 +115,9 @@ class MicrosoftFoundryProvider(LLMProvider):
 
         return LLMResponse(
             content=response.output_text,
-            model=settings.foundry_model_name,
+
+            # Logical vision model name.
+            model=settings.foundry_vision_model_name,
+
             provider="microsoft_foundry",
         )
