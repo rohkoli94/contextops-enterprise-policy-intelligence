@@ -1,5 +1,6 @@
 import uuid
 
+from app.config.settings import settings
 from app.domain.document import Document
 from app.domain.document_chunk import DocumentChunk
 from app.domain.document_element import DocumentElement
@@ -11,15 +12,16 @@ from app.providers.embedding.base import (
     EmbeddingProvider,
 )
 from app.providers.storage.base import StorageProvider
+from app.providers.vector_store.base import VectorStore
 from app.rag.chunking.base import DocumentChunker
 from app.rag.ingestion.base import DocumentExtractor
 
 
 class DocumentIngestionService:
     """
-    Orchestrates the complete document ingestion pipeline.
+    Orchestrates the complete RAG ingestion pipeline.
 
-    Current flow:
+    Flow:
 
         Blob Storage
             ->
@@ -31,17 +33,18 @@ class DocumentIngestionService:
             ->
         DocumentChunk[]
             ->
+        Metadata Enrichment
+            ->
         EmbeddingProvider
             ->
-        Embeddings
+        EmbeddedDocumentChunk[]
             ->
-        EmbeddedDocumentChunk[]
-
-    Future:
-
-        EmbeddedDocumentChunk[]
+        VectorStore
             ->
         Qdrant
+
+    The service orchestrates the pipeline but does not contain
+    provider-specific Qdrant or embedding implementation details.
     """
 
     def __init__(
@@ -50,18 +53,13 @@ class DocumentIngestionService:
         extractor: DocumentExtractor,
         chunker: DocumentChunker,
         embedder: EmbeddingProvider,
+        vector_store: VectorStore,
     ) -> None:
-        # Responsible for reading the persisted document.
         self.storage_provider = storage_provider
-
-        # Responsible for extracting structured content.
         self.extractor = extractor
-
-        # Responsible for converting elements into retrieval chunks.
         self.chunker = chunker
-
-        # Responsible for generating embeddings.
         self.embedder = embedder
+        self.vector_store = vector_store
 
     def ingest(
         self,
@@ -69,41 +67,43 @@ class DocumentIngestionService:
         blob_path: str,
         file_name: str,
         document_version_id: uuid.UUID,
+        categories: list[str] | None = None,
+        tags: list[str] | None = None,
     ) -> list[EmbeddedDocumentChunk]:
         """
         Run the complete ingestion pipeline.
 
         Steps:
 
-            1. Download document from Blob Storage
-            2. Extract DocumentElements
-            3. Create DocumentChunks
-            4. Generate embeddings in batches
-            5. Pair every chunk with its vector
-
-        Qdrant indexing will be added next.
+            1. Download document
+            2. Extract document elements
+            3. Create document chunks
+            4. Enrich chunk metadata
+            5. Generate embeddings
+            6. Pair chunks with vectors
+            7. Store vectors and payload in VectorStore
         """
 
-        # ==================================================
-        # STEP 1 — DOWNLOAD
-        # ==================================================
+        # --------------------------------------------------
+        # NORMALIZE DOCUMENT-LEVEL METADATA
+        # --------------------------------------------------
 
-        # Read the persisted document from Blob Storage.
-        #
-        # We intentionally read the stored document rather than
-        # relying on the original upload stream because that stream
-        # may already have been consumed during hashing/upload.
+        categories = categories or []
+        tags = tags or []
+
+        # --------------------------------------------------
+        # STEP 1 — DOWNLOAD
+        # --------------------------------------------------
+
         stream = self.storage_provider.download(
             path=blob_path,
         )
 
         try:
-            # ==============================================
+            # --------------------------------------------------
             # STEP 2 — EXTRACTION
-            # ==============================================
+            # --------------------------------------------------
 
-            # Docling converts the document into our normalized
-            # DocumentElement domain objects.
             elements: list[DocumentElement] = (
                 self.extractor.extract(
                     document=document,
@@ -114,67 +114,57 @@ class DocumentIngestionService:
             )
 
         finally:
-            # Always close the storage stream, even if extraction
-            # fails.
             stream.close()
 
-        # ==================================================
+        # --------------------------------------------------
         # STEP 3 — CHUNKING
-        # ==================================================
+        # --------------------------------------------------
 
-        # Convert extracted elements into retrieval-ready chunks.
-        #
-        # Example:
-        #
-        # DocumentElement[]
-        #       ->
-        # HybridDocumentChunker
-        #       ->
-        # DocumentChunk[]
-        #
-        # The chunker applies:
-        #
-        # - document hierarchy
-        # - content-type-specific rules
-        # - semantic grouping
-        # - tokenizer-aware size limits
         chunks: list[DocumentChunk] = (
             self.chunker.chunk(
                 elements
             )
         )
 
-        # If extraction produced no usable chunks, there is
-        # nothing to embed.
         if not chunks:
             return []
 
-        # ==================================================
-        # STEP 4 — EMBEDDING
-        # ==================================================
+        # --------------------------------------------------
+        # STEP 4 — METADATA ENRICHMENT
+        # --------------------------------------------------
 
-        # Extract the final text representation from each chunk.
+        # Categories and tags are document-level metadata.
+        # They do not influence chunk boundaries, so the chunker
+        # should not know about them.
         #
-        # This could be:
-        #
-        # TEXT      -> extracted text
-        # TABLE     -> structured table representation
-        # IMAGE     -> vision-generated description
-        # CHART     -> vision-generated description
-        # DIAGRAM   -> vision-generated description
+        # We propagate them into chunk.metadata because the
+        # vector store will use this metadata as Qdrant payload.
+
+        for chunk in chunks:
+            chunk.metadata["tenant_id"] = (
+                chunk.metadata.get(
+                    "tenant_id",
+                    settings.default_tenant_id,
+                )
+            )
+
+            chunk.metadata["categories"] = categories
+            chunk.metadata["tags"] = tags
+
+            # Keep version metadata explicit as well.
+            chunk.metadata["document_version_id"] = str(
+                document_version_id
+            )
+
+        # --------------------------------------------------
+        # STEP 5 — EMBEDDING
+        # --------------------------------------------------
+
         texts = [
             chunk.content
             for chunk in chunks
         ]
 
-        # The embedding provider handles:
-        #
-        # - batching
-        # - input-count limits
-        # - total-token limits
-        # - per-input token limits
-        #
-        # and returns vectors in the same order as the input texts.
         embedding_response = (
             self.embedder.generate_batch(
                 EmbeddingBatchRequest(
@@ -185,18 +175,10 @@ class DocumentIngestionService:
 
         vectors = embedding_response.vectors
 
-        # ==================================================
-        # STEP 5 — PRESERVE CHUNK <-> VECTOR RELATIONSHIP
-        # ==================================================
+        # --------------------------------------------------
+        # STEP 6 — PRESERVE CHUNK <-> VECTOR RELATIONSHIP
+        # --------------------------------------------------
 
-        # We must maintain the one-to-one relationship:
-        #
-        # Chunk 0 -> Vector 0
-        # Chunk 1 -> Vector 1
-        # Chunk 2 -> Vector 2
-        #
-        # strict=True raises ValueError if the two collections
-        # have different lengths.
         embedded_chunks = [
             EmbeddedDocumentChunk(
                 chunk=chunk,
@@ -209,19 +191,15 @@ class DocumentIngestionService:
             )
         ]
 
-        # ==================================================
-        # TEMPORARY RETURN
-        # ==================================================
-        #
-        # Qdrant is not connected yet.
-        #
-        # The next stage will consume:
-        #
-        # EmbeddedDocumentChunk
-        #     ├── chunk
-        #     └── vector
-        #
-        # and create the corresponding Qdrant point.
+        # --------------------------------------------------
+        # STEP 7 — STORE IN VECTOR STORE
+        # --------------------------------------------------
+
+        self.vector_store.upsert(
+            embedded_chunks
+        )
+
+        # Return the indexed objects for the caller/test layer.
         return embedded_chunks
 
 
@@ -250,28 +228,35 @@ class DocumentIngestionService:
 
 
 # 2. Complete flow
-#
+
+# POST /documents
+#        ↓
+# DocumentService
+#        ↓
+# _upload_document_version()
+#        ↓
 # Blob Storage
-#      ↓
-# Download stream
-#      ↓
-# DoclingDocumentExtractor
-#      ↓
+#        ↓
+# DocumentIngestionService
+#        ↓
+# Extraction
+#        ↓
 # DocumentElement[]
-#      ↓
+#        ↓
 # HybridDocumentChunker
-#      ↓
+#        ↓
 # DocumentChunk[]
-#      ↓
-# EmbeddingProvider.generate_batch()
-#      ↓
-# Vector[]
-#      ↓
+#        ↓
+# tenant/category/tag metadata
+#        ↓
+# Batch Embedding
+#        ↓
 # EmbeddedDocumentChunk[]
-#      ↓
+#        ↓
+# VectorStore.upsert()
+#        ↓
 # Qdrant
-#
-#
+
 # This is the current ContextOps ingestion pipeline.
 
 

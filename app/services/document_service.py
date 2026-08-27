@@ -59,15 +59,15 @@ class DocumentService:
 
         Flow:
 
-        Create Document
-            ->
-        Add categories and tags
-            ->
-        Calculate hash and file size
-            ->
-        Upload Version 1
-            ->
-        Trigger ingestion
+            Create Document
+                ->
+            Add categories and tags
+                ->
+            Calculate hash and file size
+                ->
+            Upload Version 1
+                ->
+            Trigger ingestion
         """
 
         document_id = uuid.uuid4()
@@ -81,21 +81,25 @@ class DocumentService:
 
         self.db.add(document)
 
+        # Add document-level categories.
         self._add_categories(
             document=document,
             categories=categories,
         )
 
+        # Add document-level tags.
         self._add_tags(
             document=document,
             tags=tags,
         )
 
-        # Calculate the content hash and file size.
+        # Calculate content hash and file size.
         #
-        # calculate_stream_hash should restore the stream position
-        # after reading it so the same stream can be uploaded.
-        content_hash, file_size = calculate_stream_hash(stream)
+        # calculate_stream_hash restores the stream position
+        # after reading so the same stream can be uploaded.
+        content_hash, file_size = calculate_stream_hash(
+            stream
+        )
 
         return self._upload_document_version(
             document=document,
@@ -119,30 +123,34 @@ class DocumentService:
 
         Flow:
 
-        Find Document
-            ->
-        Calculate hash
-            ->
-        Check duplicate version
-            ->
-        Create next version
-            ->
-        Upload
-            ->
-        Trigger ingestion
+            Find Document
+                ->
+            Calculate hash
+                ->
+            Check duplicate version
+                ->
+            Create next version
+                ->
+            Upload
+                ->
+            Trigger ingestion
         """
 
         document = (
             self.db.query(Document)
-            .filter(Document.document_id == document_id)
+            .filter(
+                Document.document_id == document_id
+            )
             .first()
         )
 
         if document is None:
             raise ValueError("Document not found")
 
-        # Calculate the content hash and file size.
-        content_hash, file_size = calculate_stream_hash(stream)
+        # Calculate content hash and file size.
+        content_hash, file_size = calculate_stream_hash(
+            stream
+        )
 
         # Prevent uploading identical document content again.
         existing_version = (
@@ -190,38 +198,40 @@ class DocumentService:
 
         Flow:
 
-        Upload original file to storage
-            ->
-        Create DocumentVersion
-            ->
-        Update current version
-            ->
-        Commit database transaction
-            ->
-        Trigger RAG ingestion
+            Upload original file to storage
+                ->
+            Create DocumentVersion
+                ->
+            Update current version
+                ->
+            Commit database transaction
+                ->
+            Trigger RAG ingestion
         """
 
         document_version_id = uuid.uuid4()
         stored_blob_path: str | None = None
 
-        # Keep every document version separately in storage.
-        #
-        # Example:
-        # documents/<document-id>/v1/policy.pdf
         blob_path = (
             f"documents/{document.document_id}/"
             f"v{version}/{file_name}"
         )
 
         try:
-            # Store the original document.
+            # --------------------------------------------------
+            # STORE ORIGINAL DOCUMENT
+            # --------------------------------------------------
+
             stored_blob_path = self.storage_provider.upload(
                 path=blob_path,
                 stream=stream,
                 content_type=content_type,
             )
 
-            # Create the database record for this version.
+            # --------------------------------------------------
+            # CREATE DOCUMENT VERSION
+            # --------------------------------------------------
+
             document_version = DocumentVersion(
                 document_version_id=document_version_id,
                 document_id=document.document_id,
@@ -235,40 +245,59 @@ class DocumentService:
 
             self.db.add(document_version)
 
-            # Update the latest version number.
+            # Update latest version.
             document.current_version = version
 
-            # Persist the document and version before ingestion.
-            #
-            # This ensures the original document and its version
-            # are successfully stored before RAG processing begins.
+            # Persist document/version before starting ingestion.
             self.db.commit()
 
-            # Read the persisted document from storage and start
-            # the RAG ingestion pipeline.
+            # --------------------------------------------------
+            # EXTRACT DOCUMENT METADATA FOR RAG INDEXING
+            # --------------------------------------------------
             #
-            # Current ingestion:
+            # Categories and tags belong to the document in the
+            # relational database.
             #
-            # Storage
-            #   ->
-            # Docling Extraction
-            #   ->
-            # TEXT / TABLE / IMAGE / CHART / DIAGRAM
+            # They are copied to the ingestion pipeline because
+            # they will later be used as retrieval metadata in
+            # Qdrant.
+
+            categories = [
+                category.name
+                for category in document.categories
+            ]
+
+            tags = [
+                tag.name
+                for tag in document.tags
+            ]
+
+            # --------------------------------------------------
+            # TRIGGER RAG INGESTION
+            # --------------------------------------------------
+            #
+            # Current:
+            #
+            # Blob Storage
+            #      ->
+            # Extraction
+            #      ->
+            # Chunking
+            #      ->
+            # Embedding
             #
             # Future:
             #
-            # Extraction
-            #   ->
-            # Chunking
-            #   ->
-            # Embedding
-            #   ->
-            # Vector DB
+            #      ->
+            # Qdrant
+
             self.document_ingestion_service.ingest(
                 document=document,
                 blob_path=stored_blob_path,
                 file_name=file_name,
-                document_version_id=document_version_id
+                document_version_id=document_version_id,
+                categories=categories,
+                tags=tags,
             )
 
             return DocumentUploadResponse(
@@ -280,18 +309,16 @@ class DocumentService:
             )
 
         except Exception:
-            # Roll back uncommitted database changes.
             self.db.rollback()
 
-            # If storage upload succeeded but a failure happened
-            # before successful processing, attempt cleanup.
             if stored_blob_path:
                 try:
                     self.storage_provider.delete(
                         stored_blob_path
                     )
                 except Exception:
-                    # Do not hide the original exception if cleanup fails.
+                    # Do not hide the original exception
+                    # if cleanup itself fails.
                     pass
 
             raise
@@ -314,7 +341,9 @@ class DocumentService:
         for category_name in categories:
             category = (
                 self.db.query(Category)
-                .filter(Category.name == category_name)
+                .filter(
+                    Category.name == category_name
+                )
                 .first()
             )
 
@@ -344,7 +373,9 @@ class DocumentService:
         for tag_name in tags:
             tag = (
                 self.db.query(Tag)
-                .filter(Tag.name == tag_name)
+                .filter(
+                    Tag.name == tag_name
+                )
                 .first()
             )
 
@@ -372,7 +403,9 @@ class DocumentService:
             .filter(
                 Document.deleted_at.is_(None)
             )
-            .order_by(Document.created_at.desc())
+            .order_by(
+                Document.created_at.desc()
+            )
             .all()
         )
 

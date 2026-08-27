@@ -4,6 +4,7 @@ from app.db.session import SessionLocal
 from app.dependencies.rag import (
     get_document_chunker,
     get_embedding_provider,
+    get_vector_store,
 )
 from app.providers.storage.azure_blob import (
     AzureBlobStorageProvider,
@@ -14,28 +15,9 @@ from app.rag.ingestion.docling_extractor import (
 from app.services.document_ingestion_service import (
     DocumentIngestionService,
 )
-from app.services.document_service import DocumentService
-
-
-def get_document_ingestion_service(
-    storage_provider: AzureBlobStorageProvider,
-) -> DocumentIngestionService:
-    """
-    Build the document ingestion pipeline.
-
-    Dependencies:
-        StorageProvider
-        DocumentExtractor
-        DocumentChunker
-        EmbeddingProvider
-    """
-
-    return DocumentIngestionService(
-        storage_provider=storage_provider,
-        extractor=DoclingDocumentExtractor(),
-        chunker=get_document_chunker(),
-        embedder=get_embedding_provider(),
-    )
+from app.services.document_service import (
+    DocumentService,
+)
 
 
 def get_document_service() -> Generator[
@@ -44,29 +26,55 @@ def get_document_service() -> Generator[
     None,
 ]:
     """
-    Build DocumentService with its RAG ingestion pipeline.
+    Build the complete document service dependency graph.
     """
 
     db = SessionLocal()
 
     try:
-        # Create storage provider once and share it with
-        # DocumentService and DocumentIngestionService.
-        storage_provider = AzureBlobStorageProvider()
+        # --------------------------------------------------
+        # STORAGE
+        # --------------------------------------------------
 
-        # Build the complete ingestion pipeline.
-        document_ingestion_service = (
-            get_document_ingestion_service(
+        storage_provider = (
+            AzureBlobStorageProvider()
+        )
+
+        # --------------------------------------------------
+        # RAG COMPONENTS
+        # --------------------------------------------------
+
+        extractor = DoclingDocumentExtractor()
+
+        chunker = get_document_chunker()
+
+        embedder = get_embedding_provider()
+
+        vector_store = get_vector_store()
+
+        # --------------------------------------------------
+        # INGESTION SERVICE
+        # --------------------------------------------------
+
+        ingestion_service = (
+            DocumentIngestionService(
                 storage_provider=storage_provider,
+                extractor=extractor,
+                chunker=chunker,
+                embedder=embedder,
+                vector_store=vector_store,
             )
         )
 
-        # Inject the ingestion pipeline into DocumentService.
+        # --------------------------------------------------
+        # DOCUMENT SERVICE
+        # --------------------------------------------------
+
         yield DocumentService(
             db=db,
             storage_provider=storage_provider,
             document_ingestion_service=(
-                document_ingestion_service
+                ingestion_service
             ),
         )
 

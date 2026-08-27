@@ -62,6 +62,20 @@ class Settings(BaseSettings):
 
     database_url: str
 
+    # ========================================================
+    # Qdrant
+    # ========================================================
+
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str | None = None
+    qdrant_collection_name: str = "contextops_documents"
+
+    qdrant_sharding_method: str = "custom"
+    qdrant_shard_number: int = 1
+    qdrant_default_shard_key: str = "default"
+
+    default_tenant_id: str = "contextops"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -422,6 +422,131 @@ EmbeddedDocumentChunk[]
           DocumentIngestionService
 ```
 
+## Day 14 — Qdrant Vector Store & Ingestion Integration
+
+Implemented the vector storage layer and completed the ingestion path from document upload to Qdrant.
+
+### Changes
+- Added VectorStore abstraction
+- Added QdrantVectorStore
+- Added local Qdrant support through Docker
+- Added Qdrant configuration
+- Added Qdrant collection initialization
+- Added cosine-distance vector configuration
+- Added payload indexes for retrieval metadata
+- Added tenant-aware metadata
+- Added custom tenant sharding
+- Added shared default shard
+- Added tenant-specific dedicated shard support
+- Added ShardKeyWithFallback routing
+- Added Qdrant point creation
+- Added Qdrant upsert
+- Connected DocumentIngestionService to VectorStore
+- Propagated categories and tags into DocumentChunk.metadata
+- Preserved document/version/source lineage in Qdrant payload
+
+
+### Current Ingestion Flow
+
+```text
+
+Upload API
+    ↓
+DocumentService
+    ↓
+Blob Storage
+    ↓
+DocumentIngestionService
+    ↓
+Document Extraction
+    ↓
+DocumentElement[]
+    ↓
+HybridDocumentChunker
+    ↓
+DocumentChunk[]
+    ↓
+Metadata Enrichment
+    ├── tenant_id
+    ├── categories
+    └── tags
+    ↓
+Batch Embedding
+    ↓
+EmbeddedDocumentChunk[]
+    ↓
+VectorStore
+    ↓
+Qdrant
+```
+
+
+### Qdrant Architecture
+```text
+                    Qdrant Collection
+                    contextops_documents
+                            │
+                    Custom Sharding
+                            │
+             ┌──────────────┴──────────────┐
+             ↓                             ↓
+       default shard               tenant-specific shard
+       normal tenants                 large tenants
+```
+
+Qdrant uses one collection with tenant-aware payload filtering and custom shard routing.
+
+### Qdrant Point
+
+Each EmbeddedDocumentChunk becomes one Qdrant point:
+
+```text
+Point
+├── id
+├── vector
+└── payload
+    ├── tenant_id
+    ├── chunk_id
+    ├── document_id
+    ├── document_version_id
+    ├── content
+    ├── element_ids
+    ├── content_type
+    ├── hierarchy_path
+    ├── page_numbers
+    ├── categories
+    └── tags
+```
+
+### Metadata Strategy
+
+PostgreSQL remains the source of truth for document lifecycle and relational metadata.
+
+Qdrant contains the retrieval-oriented copy needed for filtering and search.
+
+```text
+PostgreSQL
+    ↓
+Source of truth
+
+Qdrant
+    ↓
+Retrieval index
+```
+
+Categories and tags are propagated to every chunk because they are useful for retrieval-time filtering.
+
+### Sharding vs Metadata Filtering
+
+These are separate mechanisms:
+
+Shard routing
+→ Which physical shard should Qdrant search?
+
+Metadata filtering
+→ Which points inside that search scope match?
+Local Qdrant
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -437,3 +562,4 @@ EmbeddedDocumentChunk[]
 - Day 11 - Multimodal Document Extraction ✅
 - Day 12 — Hybrid Chunking ✅
 - Day 13 — Embeddings ✅
+- Day 14 — Qdrant Vector Store & Ingestion Integration ✅
