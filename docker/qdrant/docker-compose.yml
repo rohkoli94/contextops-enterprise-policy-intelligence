@@ -1,0 +1,121 @@
+services:
+
+  # ==========================================================
+  # QDRANT NODE 1
+  # ==========================================================
+
+  qdrant-node-1:
+    image: qdrant/qdrant:v1.19.0
+    container_name: contextops-qdrant-node-1
+
+    environment:
+      QDRANT__CLUSTER__ENABLED: "true"
+
+    command:
+      - "./qdrant"
+      - "--uri"
+      - "http://qdrant-node-1:6335"
+
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+
+    expose:
+      - "6335"
+
+    volumes:
+      - qdrant_node_1_storage:/qdrant/storage
+
+    networks:
+      - contextops-qdrant
+
+
+  # ==========================================================
+  # QDRANT NODE 2
+  # ==========================================================
+
+  qdrant-node-2:
+    image: qdrant/qdrant:v1.19.0
+    container_name: contextops-qdrant-node-2
+
+    environment:
+      QDRANT__CLUSTER__ENABLED: "true"
+
+    depends_on:
+      - qdrant-node-1
+
+    command:
+      - "./qdrant"
+      - "--bootstrap"
+      - "http://qdrant-node-1:6335"
+      - "--uri"
+      - "http://qdrant-node-2:6335"
+
+    ports:
+      - "6433:6333"
+      - "6434:6334"
+
+    expose:
+      - "6335"
+
+    volumes:
+      - qdrant_node_2_storage:/qdrant/storage
+
+    networks:
+      - contextops-qdrant
+
+
+  # ==========================================================
+  # QDRANT NODE 3
+  # ==========================================================
+
+  qdrant-node-3:
+    image: qdrant/qdrant:v1.19.0 
+    container_name: contextops-qdrant-node-3
+
+    environment:
+      QDRANT__CLUSTER__ENABLED: "true"
+
+    depends_on:
+      - qdrant-node-1
+
+    command:
+      - "./qdrant"
+      - "--bootstrap"
+      - "http://qdrant-node-1:6335"
+      - "--uri"
+      - "http://qdrant-node-3:6335"
+
+    ports:
+      - "6533:6333"
+      - "6534:6334"
+
+    expose:
+      - "6335"
+
+    volumes:
+      - qdrant_node_3_storage:/qdrant/storage
+
+    networks:
+      - contextops-qdrant
+
+
+# ============================================================
+# PERSISTENT STORAGE
+# ============================================================
+
+volumes:
+
+  qdrant_node_1_storage:
+  qdrant_node_2_storage:
+  qdrant_node_3_storage:
+
+
+# ============================================================
+# INTERNAL NETWORK
+# ============================================================
+
+networks:
+
+  contextops-qdrant:
+    driver: bridge

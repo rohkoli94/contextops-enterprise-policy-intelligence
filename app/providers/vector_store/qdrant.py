@@ -1,10 +1,14 @@
+from typing import Any
+
 from qdrant_client import QdrantClient, models
 
 from app.config.settings import settings
+from app.domain.document_chunk import DocumentChunk
 from app.domain.embedded_document_chunk import (
     EmbeddedDocumentChunk,
 )
 from app.providers.vector_store.base import VectorStore
+from app.rag.retrieval.models import RetrievedChunk
 
 
 class QdrantVectorStore(VectorStore):
@@ -286,6 +290,277 @@ class QdrantVectorStore(VectorStore):
         )
 
     # ========================================================
+    # SEARCH
+    # ========================================================
+
+    def search(
+        self,
+        query_vector: list[float],
+        tenant_id: str,
+        top_k: int,
+        filters: dict[str, Any] | None = None,
+    ) -> list[RetrievedChunk]:
+        """
+        Perform tenant-aware dense vector retrieval.
+
+        Flow:
+
+            Query Vector
+                ↓
+            Tenant Shard Routing
+                ↓
+            Metadata Filter
+                ↓
+            Qdrant ANN Search
+                ↓
+            RetrievedChunk[]
+        """
+
+        # ==================================================
+        # STEP 1 — BUILD METADATA FILTER
+        # ==================================================
+
+        query_filter = self._build_filter(
+            tenant_id=tenant_id,
+            filters=filters,
+        )
+
+        # ==================================================
+        # STEP 2 — BUILD SHARD SELECTOR
+        # ==================================================
+
+        # The application explicitly tells Qdrant:
+        #
+        # target:
+        #     tenant-specific shard
+        #
+        # fallback:
+        #     shared default shard
+        shard_selector = self.get_shard_selector(
+            tenant_id=tenant_id,
+        )
+
+        # ==================================================
+        # STEP 3 — VECTOR SEARCH
+        # ==================================================
+
+        response = self.client.query_points(
+            collection_name=(
+                settings.qdrant_collection_name
+            ),
+            query=query_vector,
+            query_filter=query_filter,
+            shard_key_selector=shard_selector,
+            limit=top_k,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        # ==================================================
+        # STEP 4 — CONVERT QDRANT RESULTS
+        # ==================================================
+
+        results: list[RetrievedChunk] = []
+
+        for point in response.points:
+            payload = point.payload or {}
+
+            chunk = self._payload_to_document_chunk(
+                payload=payload,
+            )
+
+            results.append(
+                RetrievedChunk(
+                    chunk=chunk,
+                    score=float(point.score),
+                    metadata=payload,
+                )
+            )
+
+        return results
+
+    # ========================================================
+    # FILTER BUILDER
+    # ========================================================
+
+    def _build_filter(
+        self,
+        tenant_id: str,
+        filters: dict[str, Any] | None,
+    ) -> models.Filter:
+        """
+        Build the Qdrant metadata filter.
+
+        tenant_id is always mandatory.
+
+        Supported optional filters:
+
+            document_id
+            document_version_id
+            categories
+            tags
+            content_type
+        """
+
+        conditions: list[
+            models.FieldCondition
+        ] = []
+
+        # --------------------------------------------------
+        # TENANT FILTER
+        # --------------------------------------------------
+
+        conditions.append(
+            models.FieldCondition(
+                key="tenant_id",
+                match=models.MatchValue(
+                    value=tenant_id,
+                ),
+            )
+        )
+
+        # --------------------------------------------------
+        # OPTIONAL FILTERS
+        # --------------------------------------------------
+
+        if filters:
+
+            allowed_fields = {
+                "document_id",
+                "document_version_id",
+                "categories",
+                "tags",
+                "content_type",
+            }
+
+            for key, value in filters.items():
+
+                if key not in allowed_fields:
+                    raise ValueError(
+                        f"Unsupported retrieval filter: "
+                        f"{key}"
+                    )
+
+                if value is None:
+                    continue
+
+                # ------------------------------------------
+                # SINGLE VALUE
+                # ------------------------------------------
+
+                if isinstance(value, str):
+                    conditions.append(
+                        models.FieldCondition(
+                            key=key,
+                            match=models.MatchValue(
+                                value=value,
+                            ),
+                        )
+                    )
+
+                # ------------------------------------------
+                # MULTIPLE VALUES
+                # ------------------------------------------
+
+                elif isinstance(value, list):
+
+                    if not value:
+                        continue
+
+                    conditions.append(
+                        models.FieldCondition(
+                            key=key,
+                            match=models.MatchAny(
+                                any=value,
+                            ),
+                        )
+                    )
+
+                else:
+                    raise ValueError(
+                        f"Unsupported filter value "
+                        f"for field '{key}'"
+                    )
+
+        return models.Filter(
+            must=conditions,
+        )
+
+    # ========================================================
+    # PAYLOAD -> DOCUMENT CHUNK
+    # ========================================================
+
+    def _payload_to_document_chunk(
+        self,
+        payload: dict[str, Any],
+    ) -> DocumentChunk:
+        """
+        Reconstruct a DocumentChunk from Qdrant payload.
+
+        The Qdrant payload contains the information required
+        to return a retrieval-ready chunk without fetching
+        PostgreSQL data for every search result.
+        """
+
+        return DocumentChunk(
+            chunk_id=str(
+                payload["chunk_id"]
+            ),
+            document_id=str(
+                payload["document_id"]
+            ),
+            document_version_id=str(
+                payload["document_version_id"]
+            ),
+            element_ids=[
+                str(element_id)
+                for element_id in payload.get(
+                    "element_ids",
+                    [],
+                )
+            ],
+            content=str(
+                payload["content"]
+            ),
+            chunk_index=int(
+                payload.get(
+                    "chunk_index",
+                    0,
+                )
+            ),
+            content_hash=str(
+                payload.get(
+                    "content_hash",
+                    "",
+                )
+            ),
+            metadata={
+                "tenant_id": payload.get(
+                    "tenant_id"
+                ),
+                "categories": payload.get(
+                    "categories",
+                    [],
+                ),
+                "tags": payload.get(
+                    "tags",
+                    [],
+                ),
+                "content_type": payload.get(
+                    "content_type"
+                ),
+                "hierarchy_path": payload.get(
+                    "hierarchy_path",
+                    [],
+                ),
+                "page_numbers": payload.get(
+                    "page_numbers",
+                    [],
+                ),
+            },
+        )
+
+    # ========================================================
     # POINT MAPPING
     # ========================================================
 
@@ -343,6 +618,14 @@ class QdrantVectorStore(VectorStore):
                 str(element_id)
                 for element_id in chunk.element_ids
             ],
+
+            # ------------------------------------------------
+            # Chunk position / deduplication
+            # ------------------------------------------------
+
+            "chunk_index": chunk.chunk_index,
+
+            "content_hash": chunk.content_hash,
 
             # ------------------------------------------------
             # Content metadata
@@ -427,6 +710,7 @@ class QdrantVectorStore(VectorStore):
             return shard_key
 
         return str(shard_key)
+
 
 # ============================================================
 # ROHIT NOTES — INTERVIEW / CODE FLOW

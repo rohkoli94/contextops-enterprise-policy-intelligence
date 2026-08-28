@@ -43,3 +43,11 @@ class EmbeddingProvider(ABC):
     ) -> EmbeddingBatchResponse:
         """Generate embeddings for multiple texts."""
         raise NotImplementedError
+
+    @abstractmethod
+    def get_dimension(self) -> int:
+        """
+        Return the dimensionality of vectors produced by this
+        embedding provider.
+        """
+        raise NotImplementedError

@@ -24,8 +24,6 @@ from app.tokenization.tiktoken_counter import (
 # SHARED TOKENIZER
 # ============================================================
 
-# The tokenizer corresponds to the embedding MODEL,
-# not the deployment name.
 _token_counter = TiktokenCounter(
     model_name=settings.foundry_embedding_model_name,
 )
@@ -86,8 +84,9 @@ def get_vector_store() -> VectorStore:
     """
     Create the configured vector store.
 
-    The application receives the VectorStore abstraction;
-    the concrete Qdrant implementation is selected here.
+    Collection initialization is intentionally NOT performed
+    here. Qdrant infrastructure is initialized once during
+    application startup.
     """
 
     return QdrantVectorStore()

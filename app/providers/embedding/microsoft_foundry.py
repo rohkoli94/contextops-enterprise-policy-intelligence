@@ -343,6 +343,32 @@ class MicrosoftFoundryEmbeddingProvider(
                 f"{self.MAX_TOKENS_PER_INPUT} tokens."
             )
 
+    def get_dimension(self) -> int:
+        """
+        Return the embedding vector dimension for the configured
+        embedding model.
+        """
+
+        if settings.foundry_embedding_model_name == (
+            "text-embedding-3-small"
+        ):
+            return 1536
+
+        if settings.foundry_embedding_model_name == (
+            "text-embedding-3-large"
+        ):
+            return 3072
+
+        if settings.foundry_embedding_model_name == (
+            "text-embedding-ada-002"
+        ):
+            return 1536
+
+        raise ValueError(
+            "Unsupported embedding model: "
+            f"{settings.foundry_embedding_model_name}"
+        )
+
 
 # ============================================================
 # ROHIT NOTES

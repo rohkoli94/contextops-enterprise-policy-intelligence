@@ -547,6 +547,97 @@ Metadata filtering
 → Which points inside that search scope match?
 Local Qdrant
 
+## Day 15 — Dense Retrieval Foundation + LangChain + LangGraph
+
+Started the retrieval layer.
+
+### Changes
+- Added RetrievalProvider abstraction
+- Added RetrievedChunk result model
+- Added VectorStore.search() abstraction
+- Added DenseRetriever
+- Added query embedding for dense retrieval
+- Added tenant-aware Qdrant retrieval
+- Added metadata filtering support
+- Added Qdrant ANN/vector search
+- Added shard routing during retrieval
+- Added foundation for LangChain retriever integration
+- Began separating retrieval components from workflow orchestration
+
+### Dense Retrieval Flow
+
+```text
+User Query
+    ↓
+DenseRetriever
+    ↓
+EmbeddingProvider
+    ↓
+Query Vector
+    ↓
+VectorStore
+    ↓
+Qdrant
+    ↓
+ANN Search
+    ↓
+RetrievedChunk[]
+```
+
+### Dense vs BM25
+
+Dense retrieval:
+
+```text
+Query
+ ↓
+Embedding
+ ↓
+Vector
+ ↓
+ANN Search
+```
+
+BM25:
+
+```text
+Query
+ ↓
+Lexical / keyword search
+ ↓
+BM25 Results
+```
+
+Only dense retrieval requires a query embedding.
+
+Later:
+
+```text
+             User Query
+                 │
+        ┌────────┴────────┐
+        ↓                 ↓
+      Dense              BM25
+        ↓                 ↓
+     Qdrant          Lexical Search
+        └────────┬────────┘
+                 ↓
+                RRF
+```
+
+### Retrieval Result
+
+Retrieval returns:
+
+```text
+RetrievedChunk
+├── chunk
+├── score
+└── metadata
+```
+
+The embedding vector is not returned because retrieval needs the matched chunk, metadata and relevance score rather than the stored vector itself.
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -563,3 +654,4 @@ Local Qdrant
 - Day 12 — Hybrid Chunking ✅
 - Day 13 — Embeddings ✅
 - Day 14 — Qdrant Vector Store & Ingestion Integration ✅
+- Day 15 — Dense Retrieval Foundation + LangChain + LangGraph 🔄

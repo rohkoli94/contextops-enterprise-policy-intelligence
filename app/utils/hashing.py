@@ -1,4 +1,5 @@
 import hashlib
+from typing import BinaryIO
 
 
 def calculate_content_hash(content: str | bytes) -> str:
