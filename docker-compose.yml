@@ -1,11 +1,66 @@
 services:
 
   # ==========================================================
+  # CONTEXTOPS APPLICATION
+  # ==========================================================
+
+  contextops:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: contextops-app
+
+    # --------------------------------------------------------
+    # Local development configuration
+    #
+    # Production:
+    # Do not store secrets directly in this Compose file.
+    # Use a managed secret store / deployment secret mechanism.
+    # --------------------------------------------------------
+
+    env_file:
+      - .env
+
+    environment:
+
+      # ------------------------------------------------------
+      # Docker-internal Qdrant endpoint
+      # ------------------------------------------------------
+
+      QDRANT_URL: http://qdrant-node-1:6333
+
+      # ------------------------------------------------------
+      # Docker application cache path
+      # ------------------------------------------------------
+
+      FASTEMBED_CACHE_DIR: /app/.cache/fastembed
+
+    depends_on:
+
+      qdrant-node-1:
+        condition: service_started
+
+      qdrant-node-2:
+        condition: service_started
+
+      qdrant-node-3:
+        condition: service_started
+
+    ports:
+      - "8000:8000"
+
+    networks:
+      - contextops-network
+
+
+  # ==========================================================
   # QDRANT NODE 1
   # ==========================================================
 
   qdrant-node-1:
     image: qdrant/qdrant:v1.19.0
+
     container_name: contextops-qdrant-node-1
 
     environment:
@@ -27,7 +82,7 @@ services:
       - qdrant_node_1_storage:/qdrant/storage
 
     networks:
-      - contextops-qdrant
+      - contextops-network
 
 
   # ==========================================================
@@ -36,6 +91,7 @@ services:
 
   qdrant-node-2:
     image: qdrant/qdrant:v1.19.0
+
     container_name: contextops-qdrant-node-2
 
     environment:
@@ -62,7 +118,7 @@ services:
       - qdrant_node_2_storage:/qdrant/storage
 
     networks:
-      - contextops-qdrant
+      - contextops-network
 
 
   # ==========================================================
@@ -70,7 +126,8 @@ services:
   # ==========================================================
 
   qdrant-node-3:
-    image: qdrant/qdrant:v1.19.0 
+    image: qdrant/qdrant:v1.19.0
+
     container_name: contextops-qdrant-node-3
 
     environment:
@@ -97,11 +154,11 @@ services:
       - qdrant_node_3_storage:/qdrant/storage
 
     networks:
-      - contextops-qdrant
+      - contextops-network
 
 
 # ============================================================
-# PERSISTENT STORAGE
+# QDRANT PERSISTENT STORAGE
 # ============================================================
 
 volumes:
@@ -112,10 +169,10 @@ volumes:
 
 
 # ============================================================
-# INTERNAL NETWORK
+# APPLICATION NETWORK
 # ============================================================
 
 networks:
 
-  contextops-qdrant:
+  contextops-network:
     driver: bridge

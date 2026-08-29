@@ -1,37 +1,38 @@
-from app.providers.embedding.base import (
-    EmbeddingRequest,
-    EmbeddingProvider,
+from app.providers.embedding.sparse_base import (
+    SparseEmbeddingProvider,
 )
 from app.providers.vector_store.base import VectorStore
 from app.rag.retrieval.base import RetrievalProvider
 from app.rag.retrieval.models import RetrievedChunk
 
 
-class DenseRetriever(RetrievalProvider):
+class BM25Retriever(RetrievalProvider):
     """
-    Dense semantic retriever.
+    Sparse lexical / BM25 retriever.
 
     Flow:
 
         User Query
             ↓
-        EmbeddingProvider
+        SparseEmbeddingProvider
             ↓
-        Query Vector
+        BM25 Sparse Query
             ↓
-        VectorStore.search_dense()
+        VectorStore.search_sparse()
             ↓
-        Qdrant Dense ANN Search
+        Qdrant BM25 Search
             ↓
         Top-K Retrieved Chunks
     """
 
     def __init__(
         self,
-        embedding_provider: EmbeddingProvider,
+        sparse_embedding_provider: SparseEmbeddingProvider,
         vector_store: VectorStore,
     ) -> None:
-        self.embedding_provider = embedding_provider
+        self.sparse_embedding_provider = (
+            sparse_embedding_provider
+        )
         self.vector_store = vector_store
 
     def retrieve(
@@ -42,7 +43,8 @@ class DenseRetriever(RetrievalProvider):
         filters: dict[str, object] | None = None,
     ) -> list[RetrievedChunk]:
         """
-        Retrieve the most semantically similar document chunks.
+        Retrieve the most lexically relevant document chunks
+        using BM25 sparse retrieval.
         """
 
         if not query or not query.strip():
@@ -61,25 +63,21 @@ class DenseRetriever(RetrievalProvider):
             )
 
         # --------------------------------------------------
-        # STEP 1 — EMBED QUERY
+        # STEP 1 — GENERATE BM25 SPARSE QUERY
         # --------------------------------------------------
 
-        embedding_response = (
-            self.embedding_provider.generate(
-                EmbeddingRequest(
-                    text=query,
-                )
+        sparse_query = (
+            self.sparse_embedding_provider.generate(
+                query
             )
         )
 
-        query_vector = embedding_response.vector
-
         # --------------------------------------------------
-        # STEP 2 — DENSE SEARCH
+        # STEP 2 — BM25 SEARCH
         # --------------------------------------------------
 
-        return self.vector_store.search_dense(
-            query_vector=query_vector,
+        return self.vector_store.search_sparse(
+            sparse_query=sparse_query,
             tenant_id=tenant_id,
             top_k=top_k,
             filters=filters,

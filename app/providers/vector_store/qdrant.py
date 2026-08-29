@@ -7,6 +7,7 @@ from app.domain.document_chunk import DocumentChunk
 from app.domain.embedded_document_chunk import (
     EmbeddedDocumentChunk,
 )
+from app.domain.sparse_embedding import SparseEmbedding
 from app.providers.vector_store.base import VectorStore
 from app.rag.retrieval.models import RetrievedChunk
 
@@ -30,6 +31,14 @@ class QdrantVectorStore(VectorStore):
         vector retrieval
 
     Payload contains retrieval and source metadata.
+
+    The collection supports two named vector types:
+
+        dense
+            Semantic vector used for dense retrieval.
+
+        bm25
+            Sparse lexical vector used for BM25 retrieval.
     """
 
     def __init__(self) -> None:
@@ -53,7 +62,13 @@ class QdrantVectorStore(VectorStore):
     ) -> None:
         """
         Create the Qdrant collection with custom sharding
-        if it does not already exist.
+        and support for both dense and sparse BM25 vectors.
+
+        Dense vector:
+            Used for semantic similarity retrieval.
+
+        Sparse BM25 vector:
+            Used for lexical / exact-term retrieval.
 
         In custom sharding mode, shard_number is the number
         of physical shards created per shard key.
@@ -63,18 +78,46 @@ class QdrantVectorStore(VectorStore):
             settings.qdrant_collection_name
         )
 
-        if not self.client.collection_exists(
+        if self.client.collection_exists(
             collection_name=collection_name,
         ):
-            self.client.create_collection(
-                collection_name=collection_name,
-                vectors_config=models.VectorParams(
+            return
+
+        self.client.create_collection(
+            collection_name=collection_name,
+
+            # ------------------------------------------------
+            # DENSE VECTOR
+            # ------------------------------------------------
+
+            vectors_config={
+                "dense": models.VectorParams(
                     size=vector_size,
                     distance=models.Distance.COSINE,
                 ),
-                shard_number=settings.qdrant_shard_number,
-                sharding_method=models.ShardingMethod.CUSTOM,
-            )
+            },
+
+            # ------------------------------------------------
+            # SPARSE BM25 VECTOR
+            # ------------------------------------------------
+
+            sparse_vectors_config={
+                "bm25": models.SparseVectorParams(
+                    modifier=models.Modifier.IDF,
+                ),
+            },
+
+            # ------------------------------------------------
+            # CUSTOM TENANT SHARDING
+            # ------------------------------------------------
+
+            shard_number=(
+                settings.qdrant_shard_number
+            ),
+            sharding_method=(
+                models.ShardingMethod.CUSTOM
+            ),
+        )
 
         # Keep initialization idempotent at application level.
         self.ensure_payload_indexes()
@@ -271,6 +314,7 @@ class QdrantVectorStore(VectorStore):
         #
         # Qdrant routes to target when active; otherwise
         # it uses fallback.
+
         shard_selector = (
             models.ShardKeyWithFallback(
                 target=tenant_id,
@@ -290,10 +334,10 @@ class QdrantVectorStore(VectorStore):
         )
 
     # ========================================================
-    # SEARCH
+    # DENSE SEARCH
     # ========================================================
 
-    def search(
+    def search_dense(
         self,
         query_vector: list[float],
         tenant_id: str,
@@ -305,16 +349,26 @@ class QdrantVectorStore(VectorStore):
 
         Flow:
 
-            Query Vector
+            Dense Query Vector
                 ↓
             Tenant Shard Routing
                 ↓
             Metadata Filter
                 ↓
-            Qdrant ANN Search
+            Qdrant Dense ANN Search
                 ↓
             RetrievedChunk[]
         """
+
+        # ==================================================
+        # VALIDATION
+        # ==================================================
+
+        self._validate_dense_query(
+            query_vector=query_vector,
+            tenant_id=tenant_id,
+            top_k=top_k,
+        )
 
         # ==================================================
         # STEP 1 — BUILD METADATA FILTER
@@ -329,19 +383,12 @@ class QdrantVectorStore(VectorStore):
         # STEP 2 — BUILD SHARD SELECTOR
         # ==================================================
 
-        # The application explicitly tells Qdrant:
-        #
-        # target:
-        #     tenant-specific shard
-        #
-        # fallback:
-        #     shared default shard
         shard_selector = self.get_shard_selector(
             tenant_id=tenant_id,
         )
 
         # ==================================================
-        # STEP 3 — VECTOR SEARCH
+        # STEP 3 — DENSE SEARCH
         # ==================================================
 
         response = self.client.query_points(
@@ -349,6 +396,7 @@ class QdrantVectorStore(VectorStore):
                 settings.qdrant_collection_name
             ),
             query=query_vector,
+            using="dense",
             query_filter=query_filter,
             shard_key_selector=shard_selector,
             limit=top_k,
@@ -357,27 +405,296 @@ class QdrantVectorStore(VectorStore):
         )
 
         # ==================================================
-        # STEP 4 — CONVERT QDRANT RESULTS
+        # STEP 4 — CONVERT RESULTS
         # ==================================================
 
-        results: list[RetrievedChunk] = []
+        return self._convert_results(
+            response.points
+        )
 
-        for point in response.points:
-            payload = point.payload or {}
+    # ========================================================
+    # SPARSE / BM25 SEARCH
+    # ========================================================
 
-            chunk = self._payload_to_document_chunk(
-                payload=payload,
-            )
+    def search_sparse(
+        self,
+        sparse_query: SparseEmbedding,
+        tenant_id: str,
+        top_k: int,
+        filters: dict[str, Any] | None = None,
+    ) -> list[RetrievedChunk]:
+        """
+        Perform tenant-aware sparse BM25 retrieval.
 
-            results.append(
-                RetrievedChunk(
-                    chunk=chunk,
-                    score=float(point.score),
-                    metadata=payload,
+        Flow:
+
+            Sparse BM25 Query
+                ↓
+            Tenant Shard Routing
+                ↓
+            Metadata Filter
+                ↓
+            Qdrant BM25 Search
+                ↓
+            RetrievedChunk[]
+        """
+
+        # ==================================================
+        # VALIDATION
+        # ==================================================
+
+        self._validate_sparse_query(
+            sparse_query=sparse_query,
+            tenant_id=tenant_id,
+            top_k=top_k,
+        )
+
+        # ==================================================
+        # STEP 1 — BUILD METADATA FILTER
+        # ==================================================
+
+        query_filter = self._build_filter(
+            tenant_id=tenant_id,
+            filters=filters,
+        )
+
+        # ==================================================
+        # STEP 2 — BUILD SHARD SELECTOR
+        # ==================================================
+
+        shard_selector = self.get_shard_selector(
+            tenant_id=tenant_id,
+        )
+
+        # ==================================================
+        # STEP 3 — BUILD SPARSE VECTOR
+        # ==================================================
+
+        sparse_vector = models.SparseVector(
+            indices=sparse_query.indices,
+            values=sparse_query.values,
+        )
+
+        # ==================================================
+        # STEP 4 — TENANT-SCOPED IDF
+        # ==================================================
+
+        # BM25 IDF should represent the tenant's corpus
+        # rather than mixing vocabulary statistics from
+        # unrelated tenants.
+
+        tenant_idf_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id",
+                    match=models.MatchValue(
+                        value=tenant_id,
+                    ),
                 )
-            )
+            ]
+        )
 
-        return results
+        sparse_search_params = (
+            models.SearchParams(
+                idf=models.IdfCorpusParams(
+                    corpus=tenant_idf_filter,
+                ),
+            )
+        )
+
+        # ==================================================
+        # STEP 5 — BM25 SEARCH
+        # ==================================================
+
+        response = self.client.query_points(
+            collection_name=(
+                settings.qdrant_collection_name
+            ),
+            query=sparse_vector,
+            using="bm25",
+            query_filter=query_filter,
+            shard_key_selector=shard_selector,
+            params=sparse_search_params,
+            limit=top_k,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        # ==================================================
+        # STEP 6 — CONVERT RESULTS
+        # ==================================================
+
+        return self._convert_results(
+            response.points
+        )
+
+    # ========================================================
+    # HYBRID SEARCH
+    # ========================================================
+
+    def search_hybrid(
+        self,
+        query_vector: list[float],
+        sparse_query: SparseEmbedding,
+        tenant_id: str,
+        top_k: int,
+        filters: dict[str, Any] | None = None,
+    ) -> list[RetrievedChunk]:
+        """
+        Perform tenant-aware hybrid retrieval.
+
+        Dense and sparse retrieval are performed independently
+        and their ranked candidates are combined using RRF.
+
+        Flow:
+
+            Dense Query Vector
+                    +
+            Sparse BM25 Query
+                    ↓
+            Tenant Shard Routing
+                    ↓
+            Metadata Filter
+                    ↓
+            ┌───────────────────────┐
+            │ Dense candidate search│
+            │ BM25 candidate search │
+            └───────────┬───────────┘
+                        ↓
+                       RRF
+                        ↓
+                 RetrievedChunk[]
+        """
+
+        # ==================================================
+        # VALIDATION
+        # ==================================================
+
+        self._validate_dense_query(
+            query_vector=query_vector,
+            tenant_id=tenant_id,
+            top_k=top_k,
+        )
+
+        self._validate_sparse_query(
+            sparse_query=sparse_query,
+            tenant_id=tenant_id,
+            top_k=top_k,
+        )
+
+        # ==================================================
+        # STEP 1 — BUILD METADATA FILTER
+        # ==================================================
+
+        query_filter = self._build_filter(
+            tenant_id=tenant_id,
+            filters=filters,
+        )
+
+        # ==================================================
+        # STEP 2 — BUILD SHARD SELECTOR
+        # ==================================================
+
+        shard_selector = self.get_shard_selector(
+            tenant_id=tenant_id,
+        )
+
+        # ==================================================
+        # STEP 3 — BUILD BM25 QUERY
+        # ==================================================
+
+        sparse_vector = models.SparseVector(
+            indices=sparse_query.indices,
+            values=sparse_query.values,
+        )
+
+        # ==================================================
+        # STEP 4 — TENANT-SCOPED IDF
+        # ==================================================
+
+        tenant_idf_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id",
+                    match=models.MatchValue(
+                        value=tenant_id,
+                    ),
+                )
+            ]
+        )
+
+        sparse_search_params = (
+            models.SearchParams(
+                idf=models.IdfCorpusParams(
+                    corpus=tenant_idf_filter,
+                ),
+            )
+        )
+
+        # ==================================================
+        # STEP 5 — HYBRID SEARCH
+        # ==================================================
+
+        response = self.client.query_points(
+            collection_name=(
+                settings.qdrant_collection_name
+            ),
+
+            # ------------------------------------------------
+            # DENSE + BM25 CANDIDATE SEARCH
+            # ------------------------------------------------
+
+            prefetch=[
+                models.Prefetch(
+                    query=query_vector,
+                    using="dense",
+                    filter=query_filter,
+                    limit=top_k,
+                ),
+                models.Prefetch(
+                    query=sparse_vector,
+                    using="bm25",
+                    filter=query_filter,
+                    params=sparse_search_params,
+                    limit=top_k,
+                ),
+            ],
+
+            # ------------------------------------------------
+            # RECIPROCAL RANK FUSION
+            # ------------------------------------------------
+
+            query=models.FusionQuery(
+                fusion=models.Fusion.RRF,
+            ),
+
+            # ------------------------------------------------
+            # TENANT SHARD ROUTING
+            # ------------------------------------------------
+
+            shard_key_selector=shard_selector,
+
+            # ------------------------------------------------
+            # FINAL RESULT SIZE
+            # ------------------------------------------------
+
+            limit=top_k,
+
+            # ------------------------------------------------
+            # RETURN PAYLOAD
+            # ------------------------------------------------
+
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        # ==================================================
+        # STEP 6 — CONVERT RESULTS
+        # ==================================================
+
+        return self._convert_results(
+            response.points
+        )
 
     # ========================================================
     # FILTER BUILDER
@@ -487,6 +804,43 @@ class QdrantVectorStore(VectorStore):
         )
 
     # ========================================================
+    # RESULT CONVERSION
+    # ========================================================
+
+    def _convert_results(
+        self,
+        points: list[Any],
+    ) -> list[RetrievedChunk]:
+        """
+        Convert Qdrant scored points into RetrievedChunk
+        domain results.
+        """
+
+        results: list[RetrievedChunk] = []
+
+        for point in points:
+
+            payload = point.payload or {}
+
+            chunk = (
+                self._payload_to_document_chunk(
+                    payload=payload,
+                )
+            )
+
+            results.append(
+                RetrievedChunk(
+                    chunk=chunk,
+                    score=float(
+                        point.score
+                    ),
+                    metadata=payload,
+                )
+            )
+
+        return results
+
+    # ========================================================
     # PAYLOAD -> DOCUMENT CHUNK
     # ========================================================
 
@@ -571,8 +925,11 @@ class QdrantVectorStore(VectorStore):
         """
         Convert EmbeddedDocumentChunk into a Qdrant point.
 
-        The existing DocumentChunk.metadata is the single
-        metadata source for the Qdrant payload.
+        The Qdrant point contains:
+
+        - dense vector for semantic retrieval
+        - sparse BM25 vector for lexical retrieval
+        - payload containing document and retrieval metadata
         """
 
         chunk = embedded_chunk.chunk
@@ -660,11 +1017,30 @@ class QdrantVectorStore(VectorStore):
             ),
         }
 
+        # ----------------------------------------------------
+        # SPARSE BM25 VECTOR
+        # ----------------------------------------------------
+
+        sparse_vector = models.SparseVector(
+            indices=embedded_chunk.sparse_vector.indices,
+            values=embedded_chunk.sparse_vector.values,
+        )
+
+        # ----------------------------------------------------
+        # QDRANT POINT
+        # ----------------------------------------------------
+
         return models.PointStruct(
             id=str(
                 chunk.chunk_id
             ),
-            vector=embedded_chunk.vector,
+            vector={
+                # Dense semantic representation.
+                "dense": embedded_chunk.vector,
+
+                # Sparse lexical / BM25 representation.
+                "bm25": sparse_vector,
+            },
             payload=payload,
         )
 
@@ -692,6 +1068,68 @@ class QdrantVectorStore(VectorStore):
                 settings.qdrant_default_shard_key
             ),
         )
+
+    # ========================================================
+    # VALIDATION HELPERS
+    # ========================================================
+
+    @staticmethod
+    def _validate_dense_query(
+        query_vector: list[float],
+        tenant_id: str,
+        top_k: int,
+    ) -> None:
+        """
+        Validate dense retrieval inputs.
+        """
+
+        if not query_vector:
+            raise ValueError(
+                "Query vector cannot be empty."
+            )
+
+        if not tenant_id or not tenant_id.strip():
+            raise ValueError(
+                "Tenant ID cannot be empty."
+            )
+
+        if top_k <= 0:
+            raise ValueError(
+                "top_k must be greater than zero."
+            )
+
+    @staticmethod
+    def _validate_sparse_query(
+        sparse_query: SparseEmbedding,
+        tenant_id: str,
+        top_k: int,
+    ) -> None:
+        """
+        Validate sparse BM25 retrieval inputs.
+        """
+
+        if not sparse_query.indices:
+            raise ValueError(
+                "Sparse BM25 query cannot be empty."
+            )
+
+        if len(sparse_query.indices) != len(
+            sparse_query.values
+        ):
+            raise ValueError(
+                "Sparse query indices and values "
+                "must have the same length."
+            )
+
+        if not tenant_id or not tenant_id.strip():
+            raise ValueError(
+                "Tenant ID cannot be empty."
+            )
+
+        if top_k <= 0:
+            raise ValueError(
+                "top_k must be greater than zero."
+            )
 
     # ========================================================
     # HELPERS
@@ -723,3 +1161,49 @@ class QdrantVectorStore(VectorStore):
 
 # Metadata filtering
 # → logically narrow the matching documents/chunks
+
+
+# Dense retrieval:
+#
+# Query
+#   ↓
+# Dense embedding
+#   ↓
+# Qdrant dense ANN
+#
+# BM25 retrieval:
+#
+# Query
+#   ↓
+# Sparse BM25 representation
+#   ↓
+# Qdrant sparse search
+#
+# Hybrid retrieval:
+#
+# Query
+#   ↓
+# Dense query + BM25 query
+#   ↓
+# Dense candidates + BM25 candidates
+#   ↓
+# RRF
+#   ↓
+# Final ranked results
+
+
+# ============================================================
+# PRODUCTION DESIGN NOTE
+# ============================================================
+
+# The VectorStore abstraction deliberately separates:
+#
+#     search_dense()
+#     search_sparse()
+#     search_hybrid()
+#
+# This keeps retrieval responsibilities explicit and prevents
+# DenseRetriever from silently becoming responsible for BM25.
+#
+# Qdrant-specific implementation details remain inside
+# QdrantVectorStore.

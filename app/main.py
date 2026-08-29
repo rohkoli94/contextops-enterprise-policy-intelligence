@@ -9,7 +9,7 @@ from app.api.v2.router import router as v2_router
 from app.config.settings import settings
 
 from app.dependencies.startup import (
-    initialize_qdrant,
+    initialize_rag,
 )
 
 
@@ -40,18 +40,17 @@ async def lifespan(
     Application startup and shutdown lifecycle.
 
     Startup:
-        Initialize Qdrant infrastructure once.
+        Initialize RAG infrastructure once.
 
     Shutdown:
-        No Qdrant shutdown action is required because Qdrant
-        runs as an independent service/container.
+        No explicit cleanup is currently required.
     """
 
     # --------------------------------------------------------
     # STARTUP
     # --------------------------------------------------------
 
-    initialize_qdrant()
+    initialize_rag()
 
     yield
 
@@ -59,7 +58,7 @@ async def lifespan(
     # SHUTDOWN
     # --------------------------------------------------------
 
-    # Nothing required here currently.
+    # No explicit cleanup required currently.
     pass
 
 

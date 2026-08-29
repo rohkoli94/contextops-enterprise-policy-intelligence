@@ -11,6 +11,9 @@ from app.providers.embedding.base import (
     EmbeddingBatchRequest,
     EmbeddingProvider,
 )
+from app.providers.embedding.sparse_base import (
+    SparseEmbeddingProvider,
+)
 from app.providers.storage.base import StorageProvider
 from app.providers.vector_store.base import VectorStore
 from app.rag.chunking.base import DocumentChunker
@@ -35,7 +38,9 @@ class DocumentIngestionService:
             ->
         Metadata Enrichment
             ->
-        EmbeddingProvider
+        Dense EmbeddingProvider
+            +
+        Sparse EmbeddingProvider
             ->
         EmbeddedDocumentChunk[]
             ->
@@ -53,12 +58,14 @@ class DocumentIngestionService:
         extractor: DocumentExtractor,
         chunker: DocumentChunker,
         embedder: EmbeddingProvider,
+        sparse_embedder: SparseEmbeddingProvider,
         vector_store: VectorStore,
     ) -> None:
         self.storage_provider = storage_provider
         self.extractor = extractor
         self.chunker = chunker
         self.embedder = embedder
+        self.sparse_embedder = sparse_embedder
         self.vector_store = vector_store
 
     def ingest(
@@ -79,9 +86,10 @@ class DocumentIngestionService:
             2. Extract document elements
             3. Create document chunks
             4. Enrich chunk metadata
-            5. Generate embeddings
-            6. Pair chunks with vectors
-            7. Store vectors and payload in VectorStore
+            5. Generate dense embeddings
+            6. Generate sparse BM25 embeddings
+            7. Pair chunks with both vector representations
+            8. Store vectors and payload in VectorStore
         """
 
         # --------------------------------------------------
@@ -157,7 +165,7 @@ class DocumentIngestionService:
             )
 
         # --------------------------------------------------
-        # STEP 5 — EMBEDDING
+        # STEP 5 — DENSE EMBEDDING
         # --------------------------------------------------
 
         texts = [
@@ -173,26 +181,55 @@ class DocumentIngestionService:
             )
         )
 
-        vectors = embedding_response.vectors
+        dense_vectors = embedding_response.vectors
 
         # --------------------------------------------------
-        # STEP 6 — PRESERVE CHUNK <-> VECTOR RELATIONSHIP
+        # STEP 6 — SPARSE BM25 EMBEDDING
         # --------------------------------------------------
+
+        # BM25 does not use the dense embedding model.
+        #
+        # It creates a sparse lexical representation based on
+        # the terms present in the chunk text.
+
+        sparse_vectors = (
+            self.sparse_embedder.generate_batch(
+                texts
+            )
+        )
+
+        # --------------------------------------------------
+        # STEP 7 — PRESERVE CHUNK/VECTOR RELATIONSHIPS
+        # --------------------------------------------------
+
+        # Every chunk must have:
+        #
+        #     one dense vector
+        #     +
+        #     one sparse BM25 vector
+        #
+        # Chunk 0 -> Dense 0 -> Sparse 0
+        # Chunk 1 -> Dense 1 -> Sparse 1
+        # Chunk 2 -> Dense 2 -> Sparse 2
+        #
+        # strict=True protects the one-to-one relationship.
 
         embedded_chunks = [
             EmbeddedDocumentChunk(
                 chunk=chunk,
-                vector=vector,
+                vector=dense_vector,
+                sparse_vector=sparse_vector,
             )
-            for chunk, vector in zip(
+            for chunk, dense_vector, sparse_vector in zip(
                 chunks,
-                vectors,
+                dense_vectors,
+                sparse_vectors,
                 strict=True,
             )
         ]
 
         # --------------------------------------------------
-        # STEP 7 — STORE IN VECTOR STORE
+        # STEP 8 — STORE IN VECTOR STORE
         # --------------------------------------------------
 
         self.vector_store.upsert(
@@ -228,7 +265,7 @@ class DocumentIngestionService:
 
 
 # 2. Complete flow
-
+#
 # POST /documents
 #        ↓
 # DocumentService
@@ -249,14 +286,16 @@ class DocumentIngestionService:
 #        ↓
 # tenant/category/tag metadata
 #        ↓
-# Batch Embedding
+# Dense Embedding
+#        ↓
+# Sparse BM25 Embedding
 #        ↓
 # EmbeddedDocumentChunk[]
 #        ↓
 # VectorStore.upsert()
 #        ↓
 # Qdrant
-
+#
 # This is the current ContextOps ingestion pipeline.
 
 
@@ -286,9 +325,11 @@ class DocumentIngestionService:
 
 # 5. Why do we create EmbeddedDocumentChunk?
 #
-# Qdrant needs both:
+# Qdrant needs:
 #
-#     vector
+#     dense vector
+#     +
+#     sparse BM25 vector
 #     +
 #     chunk metadata/content
 #
@@ -297,35 +338,43 @@ class DocumentIngestionService:
 # Chunk:
 # "Employees can work remotely up to 3 days."
 #
-# Vector:
+# Dense Vector:
 # [0.12, -0.04, 0.81, ...]
 #
-# EmbeddedDocumentChunk keeps these together.
+# Sparse BM25 Vector:
+# indices = [...]
+# values  = [...]
+#
+# EmbeddedDocumentChunk keeps these retrieval
+# representations together with the original chunk.
 
 
 # 6. Why use zip(..., strict=True)?
 #
-# We expect exactly one embedding for every chunk.
+# We expect exactly one dense embedding and one sparse
+# embedding for every chunk.
 #
 # Example:
 #
-# chunks  = [C1, C2, C3]
-# vectors = [V1, V2, V3]
+# chunks        = [C1, C2, C3]
+# dense_vectors = [D1, D2, D3]
+# sparse_vectors = [S1, S2, S3]
 #
 # Result:
 #
-# C1 -> V1
-# C2 -> V2
-# C3 -> V3
+# C1 -> D1 -> S1
+# C2 -> D2 -> S2
+# C3 -> D3 -> S3
 #
-# If the lengths differ, strict=True raises an error rather than
-# silently producing incorrect mappings.
+# If any lengths differ, strict=True raises an error rather
+# than silently producing incorrect mappings.
 
 
 # 7. Why generate embeddings here?
 #
-# Chunking must happen before embedding because the embedding model
-# should represent the final retrieval unit, not the entire document.
+# Chunking must happen before embedding because the embedding
+# models should represent the final retrieval unit, not the
+# entire document.
 #
 # Pipeline:
 #
@@ -335,25 +384,40 @@ class DocumentIngestionService:
 #   ↓
 # Chunk
 #   ↓
-# Embed
+# Metadata enrichment
+#   ↓
+# Dense embedding + Sparse BM25 embedding
 #   ↓
 # Vector DB
 #
-# This matches the production RAG pattern of precomputing document
-# embeddings during ingestion rather than generating them at query time.
+# Dense retrieval uses semantic embeddings.
+#
+# BM25 retrieval uses sparse lexical representations.
+#
+# Both are precomputed during ingestion.
 
 
 # 8. What happens at query time later?
 #
 # Document ingestion:
 #
-# Chunk -> Embedding -> Qdrant
+# Chunk
+#   ├── Dense embedding
+#   └── BM25 sparse representation
+#          ↓
+#       Qdrant
 #
 # User query:
 #
-# Query -> Query Embedding -> Qdrant similarity search
-#
-# The same embedding model must be used for both.
+# Query
+#   ├── Dense query embedding
+#   └── BM25 sparse query representation
+#          ↓
+#       Qdrant
+#          ↓
+#    Dense + BM25 results
+#          ↓
+#         RRF
 
 
 # 9. Current vs future responsibility
@@ -362,17 +426,19 @@ class DocumentIngestionService:
 #
 # Extraction
 # Chunking
-# Embedding
+# Metadata enrichment
+# Dense embedding
+# Sparse BM25 embedding
+# Qdrant indexing
 #
 # NEXT:
 #
-# Qdrant indexing
-#
-# AFTER THAT:
-#
 # Retrieval
 # Hybrid BM25 + Dense Search
+# RRF
 # Reranking
+# Query intelligence
+# LangGraph orchestration
 # ContextOps
 # LLM generation
 
@@ -388,7 +454,9 @@ class DocumentIngestionService:
 # Worker
 #      ├── Extraction
 #      ├── Chunking
-#      ├── Batch Embedding
+#      ├── Metadata enrichment
+#      ├── Dense embedding
+#      ├── Sparse BM25 embedding
 #      └── Qdrant indexing
 #
 # This avoids blocking API requests on expensive document processing.

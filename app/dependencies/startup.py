@@ -1,23 +1,27 @@
 from app.dependencies.rag import (
     get_embedding_provider,
+    get_sparse_embedding_provider,
     get_vector_store,
+    get_hybrid_retriever,
 )
 
 
-def initialize_qdrant() -> None:
+def initialize_rag() -> None:
     """
-    Initialize Qdrant infrastructure when the application starts.
+    Initialize RAG infrastructure when the application starts.
 
     Steps:
 
-        1. Create embedding provider
+        1. Create dense embedding provider
         2. Get embedding vector dimension
-        3. Create vector store
-        4. Initialize Qdrant collection
+        3. Initialize sparse BM25 provider
+        4. Initialize hybrid retriever
+        5. Create vector store
+        6. Initialize Qdrant collection
     """
 
     # --------------------------------------------------
-    # STEP 1 — EMBEDDING PROVIDER
+    # STEP 1 — DENSE EMBEDDING PROVIDER
     # --------------------------------------------------
 
     embedding_provider = (
@@ -33,13 +37,29 @@ def initialize_qdrant() -> None:
     )
 
     # --------------------------------------------------
-    # STEP 3 — VECTOR STORE
+    # STEP 3 — SPARSE BM25 PROVIDER
+    # --------------------------------------------------
+
+    # Force initialization of the shared BM25 provider
+    # during application startup.
+    get_sparse_embedding_provider()
+
+    # --------------------------------------------------
+    # STEP 4 — HYBRID RETRIEVER
+    # --------------------------------------------------
+
+    # Force construction of the shared hybrid retriever
+    # during application startup.
+    get_hybrid_retriever()
+
+    # --------------------------------------------------
+    # STEP 5 — VECTOR STORE
     # --------------------------------------------------
 
     vector_store = get_vector_store()
 
     # --------------------------------------------------
-    # STEP 4 — INITIALIZE QDRANT
+    # STEP 6 — INITIALIZE QDRANT
     # --------------------------------------------------
 
     vector_store.ensure_collection(

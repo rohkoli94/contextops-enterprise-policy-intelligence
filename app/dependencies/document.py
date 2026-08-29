@@ -1,20 +1,26 @@
 from collections.abc import Generator
 
 from app.db.session import SessionLocal
+
 from app.dependencies.rag import (
     get_document_chunker,
     get_embedding_provider,
+    get_sparse_embedding_provider,
     get_vector_store,
 )
+
 from app.providers.storage.azure_blob import (
     AzureBlobStorageProvider,
 )
+
 from app.rag.ingestion.docling_extractor import (
     DoclingDocumentExtractor,
 )
+
 from app.services.document_ingestion_service import (
     DocumentIngestionService,
 )
+
 from app.services.document_service import (
     DocumentService,
 )
@@ -44,13 +50,37 @@ def get_document_service() -> Generator[
         # RAG COMPONENTS
         # --------------------------------------------------
 
-        extractor = DoclingDocumentExtractor()
+        extractor = (
+            DoclingDocumentExtractor()
+        )
 
-        chunker = get_document_chunker()
+        chunker = (
+            get_document_chunker()
+        )
 
-        embedder = get_embedding_provider()
+        # --------------------------------------------------
+        # DENSE EMBEDDING PROVIDER
+        # --------------------------------------------------
 
-        vector_store = get_vector_store()
+        embedder = (
+            get_embedding_provider()
+        )
+
+        # --------------------------------------------------
+        # SPARSE BM25 EMBEDDING PROVIDER
+        # --------------------------------------------------
+
+        sparse_embedder = (
+            get_sparse_embedding_provider()
+        )
+
+        # --------------------------------------------------
+        # VECTOR STORE
+        # --------------------------------------------------
+
+        vector_store = (
+            get_vector_store()
+        )
 
         # --------------------------------------------------
         # INGESTION SERVICE
@@ -62,6 +92,7 @@ def get_document_service() -> Generator[
                 extractor=extractor,
                 chunker=chunker,
                 embedder=embedder,
+                sparse_embedder=sparse_embedder,
                 vector_store=vector_store,
             )
         )

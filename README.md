@@ -638,6 +638,190 @@ RetrievedChunk
 
 The embedding vector is not returned because retrieval needs the matched chunk, metadata and relevance score rather than the stored vector itself.
 
+
+### Day 16 — Hybrid Retrieval Foundation
+
+Implemented the production hybrid retrieval foundation by extending dense retrieval with sparse BM25 retrieval.
+
+### Changes
+
+- Continued dense embedding through EmbeddingProvider
+- Added SparseEmbedding domain model
+- Added SparseEmbeddingProvider abstraction
+- Added BM25SparseEmbeddingProvider
+- Added configurable BM25 model and FastEmbed cache configuration
+- Added FastAPI startup initialization for the sparse embedding provider
+- Added production Docker BM25 model preloading during image build
+- Added Docker application setup alongside the 3-node Qdrant cluster
+- Updated EmbeddedDocumentChunk to contain both dense and sparse representations
+- Updated DocumentIngestionService to generate both dense and BM25 embeddings
+- Updated Qdrant collection to support named dense and bm25 vectors
+- Updated Qdrant points to store both dense and sparse vectors
+- Added search_dense() to VectorStore
+- Added search_sparse() to VectorStore
+- Added search_hybrid() to VectorStore
+- Updated DenseRetriever for dense-only retrieval
+- Added BM25Retriever for sparse retrieval
+- Added HybridRetriever
+- Added Qdrant native hybrid search with RRF
+- Preserved tenant-aware shard routing and metadata filtering
+
+### Embedding Architecture
+
+```text
+DocumentChunk / User Query
+          │
+    ┌─────┴─────┐
+    ↓           ↓
+  Dense        BM25
+Embedding     Sparse
+ Provider     Provider
+    ↓           ↓
+Dense Vector  Sparse Vector
+```
+
+### Retrieval Architecture
+
+```text
+                         User Query
+                             │
+               ┌─────────────┴─────────────┐
+               ↓                           ↓
+        DenseRetriever                BM25Retriever
+               ↓                           ↓
+       Dense query vector          BM25 sparse query
+               └─────────────┬─────────────┘
+                             ↓
+                     HybridRetriever
+                             ↓
+                    Qdrant Hybrid Search
+                             ↓
+                            RRF
+                             ↓
+                    RetrievedChunk[]
+```
+
+### Qdrant Vector Configuration
+
+contextops_documents
+
+```text
+├── dense
+│   └── 1536 dimensions / Cosine
+│
+└── bm25
+    └── Sparse
+```
+
+Each Qdrant point now contains:
+
+```text
+Point
+├── id
+├── dense vector
+├── bm25 sparse vector
+└── payload
+    ├── tenant_id
+    ├── chunk_id
+    ├── document_id
+    ├── document_version_id
+    ├── content
+    ├── element_ids
+    ├── content_type
+    ├── hierarchy_path
+    ├── page_numbers
+    ├── categories
+    └── tags
+```
+
+### Dense Retrieval
+
+```text
+Query
+   ↓
+Dense EmbeddingProvider
+   ↓
+Dense Query Vector
+   ↓
+VectorStore.search_dense()
+   ↓
+Qdrant Dense ANN
+```
+
+### Sparse BM25 Retrieval
+
+```text
+Query
+   ↓
+SparseEmbeddingProvider
+   ↓
+BM25 Sparse Query
+   ↓
+VectorStore.search_sparse()
+   ↓
+Qdrant BM25
+```
+
+Only the dense branch uses the dense query embedding. The BM25 branch uses a separate sparse representation.
+
+### Hybrid Retrieval
+
+```text
+Dense Query
+     +
+BM25 Sparse Query
+     ↓
+Qdrant
+     ↓
+Dense Candidates + BM25 Candidates
+     ↓
+RRF
+     ↓
+Combined Ranked Results
+```
+
+The RRF fusion is handled by Qdrant's native hybrid query rather than implementing score fusion separately in the application.
+
+### Docker
+
+The application is now designed to run with:
+
+```text
+Docker Compose
+      │
+      ├── ContextOps
+      │     ├── FastAPI
+      │     ├── FastEmbed
+      │     └── BM25 model
+      │
+      └── Qdrant Cluster
+            ├── Node 1
+            ├── Node 2
+            └── Node 3
+```
+
+The Qdrant/bm25 model is preloaded during Docker image build and cached inside the application image.
+
+### Current Retrieval Flow
+
+```text
+User Query
+     ↓
+Query representation
+     ├── Dense vector
+     └── BM25 sparse vector
+     ↓
+Tenant shard routing
+     ↓
+Metadata filtering
+     ↓
+Qdrant Hybrid Search
+     ↓
+RRF
+     ↓
+RetrievedChunk[]
+```
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -654,4 +838,5 @@ The embedding vector is not returned because retrieval needs the matched chunk, 
 - Day 12 — Hybrid Chunking ✅
 - Day 13 — Embeddings ✅
 - Day 14 — Qdrant Vector Store & Ingestion Integration ✅
-- Day 15 — Dense Retrieval Foundation + LangChain + LangGraph 🔄
+- Day 15 — Dense Retrieval Foundation + LangChain + LangGraph ✅
+- Day 16 — Hybrid Retrieval Foundation ✅

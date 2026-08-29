@@ -76,6 +76,13 @@ class Settings(BaseSettings):
 
     default_tenant_id: str = "contextops"
 
+    # BM25 sparse embedding model
+    bm25_model_name: str = "Qdrant/bm25"
+    sparse_embedding_provider: str = "bm25"
+
+    #FastEmbed - For production Docker, we'll later override it with something such as:/app/.cache/fastembed
+    fastembed_cache_dir: str = ".cache/fastembed" 
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
