@@ -15,6 +15,8 @@ class HybridRetriever(RetrievalProvider):
     Hybrid retriever combining dense semantic retrieval
     with sparse BM25 lexical retrieval.
 
+    The query path is asynchronous.
+
     Flow:
 
         User Query
@@ -27,7 +29,7 @@ class HybridRetriever(RetrievalProvider):
     Dense Query              Sparse Query
         └────────────┬─────────────┘
                      ↓
-             VectorStore.search_hybrid()
+             VectorStore.asearch_hybrid()
                      ↓
                   Qdrant
                      ↓
@@ -45,12 +47,18 @@ class HybridRetriever(RetrievalProvider):
         vector_store: VectorStore,
     ) -> None:
         self.embedding_provider = embedding_provider
+
         self.sparse_embedding_provider = (
             sparse_embedding_provider
         )
+
         self.vector_store = vector_store
 
-    def retrieve(
+    # ========================================================
+    # ASYNC HYBRID RETRIEVAL
+    # ========================================================
+
+    async def aretrieve(
         self,
         query: str,
         tenant_id: str,
@@ -58,36 +66,19 @@ class HybridRetriever(RetrievalProvider):
         filters: dict[str, object] | None = None,
     ) -> list[RetrievedChunk]:
         """
-        Retrieve relevant document chunks using both:
+        Asynchronously retrieve relevant document chunks
+        using both dense semantic retrieval and sparse
+        BM25 lexical retrieval.
 
-        - dense semantic retrieval
-        - sparse BM25 lexical retrieval
-
-        The final fusion is delegated to the VectorStore
-        implementation.
+        The final fusion is delegated to the VectorStore.
         """
-
-        if not query or not query.strip():
-            raise ValueError(
-                "Query cannot be empty."
-            )
-
-        if not tenant_id or not tenant_id.strip():
-            raise ValueError(
-                "Tenant ID cannot be empty."
-            )
-
-        if top_k <= 0:
-            raise ValueError(
-                "top_k must be greater than zero."
-            )
 
         # --------------------------------------------------
         # STEP 1 — GENERATE DENSE QUERY
         # --------------------------------------------------
 
         embedding_response = (
-            self.embedding_provider.generate(
+            await self.embedding_provider.agenerate(
                 EmbeddingRequest(
                     text=query,
                 )
@@ -103,7 +94,7 @@ class HybridRetriever(RetrievalProvider):
         # --------------------------------------------------
 
         sparse_query = (
-            self.sparse_embedding_provider.generate(
+            await self.sparse_embedding_provider.agenerate(
                 query
             )
         )
@@ -112,7 +103,7 @@ class HybridRetriever(RetrievalProvider):
         # STEP 3 — HYBRID SEARCH
         # --------------------------------------------------
 
-        return self.vector_store.search_hybrid(
+        return await self.vector_store.asearch_hybrid(
             query_vector=query_vector,
             sparse_query=sparse_query,
             tenant_id=tenant_id,

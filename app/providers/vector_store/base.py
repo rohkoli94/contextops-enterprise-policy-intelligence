@@ -67,7 +67,7 @@ class VectorStore(ABC):
     # ========================================================
 
     @abstractmethod
-    def search_dense(
+    async def asearch_dense(
         self,
         query_vector: list[float],
         tenant_id: str,
@@ -75,7 +75,7 @@ class VectorStore(ABC):
         filters: dict[str, Any] | None = None,
     ) -> list[RetrievedChunk]:
         """
-        Perform dense semantic retrieval.
+        Asynchronously perform dense semantic retrieval.
 
         query_vector:
             Dense embedding of the user query.
@@ -102,7 +102,7 @@ class VectorStore(ABC):
     # ========================================================
 
     @abstractmethod
-    def search_sparse(
+    async def asearch_sparse(
         self,
         sparse_query: SparseEmbedding,
         tenant_id: str,
@@ -110,7 +110,8 @@ class VectorStore(ABC):
         filters: dict[str, Any] | None = None,
     ) -> list[RetrievedChunk]:
         """
-        Perform sparse lexical / BM25 retrieval.
+        Asynchronously perform sparse lexical / BM25
+        retrieval.
 
         sparse_query:
             BM25 sparse representation of the user query.
@@ -131,7 +132,7 @@ class VectorStore(ABC):
     # ========================================================
 
     @abstractmethod
-    def search_hybrid(
+    async def asearch_hybrid(
         self,
         query_vector: list[float],
         sparse_query: SparseEmbedding,
@@ -140,7 +141,8 @@ class VectorStore(ABC):
         filters: dict[str, Any] | None = None,
     ) -> list[RetrievedChunk]:
         """
-        Perform hybrid dense + sparse retrieval.
+        Asynchronously perform hybrid dense + sparse
+        retrieval.
 
         query_vector:
             Dense embedding of the user query.

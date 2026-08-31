@@ -1,5 +1,12 @@
 from azure.ai.projects import AIProjectClient
+from azure.ai.projects.aio import (
+    AIProjectClient as AsyncAIProjectClient,
+)
+
 from azure.identity import DefaultAzureCredential
+from azure.identity.aio import (
+    DefaultAzureCredential as AsyncDefaultAzureCredential,
+)
 
 from app.config.settings import settings
 from app.providers.embedding.base import (
@@ -18,8 +25,10 @@ class MicrosoftFoundryEmbeddingProvider(
     Microsoft Foundry embedding provider.
 
     Supports:
-    - Single embedding generation
-    - Batch embedding generation
+
+    - Synchronous single embedding generation
+    - Asynchronous single embedding generation
+    - Synchronous batch embedding generation
 
     Batch limits enforced by this provider:
 
@@ -31,10 +40,19 @@ class MicrosoftFoundryEmbeddingProvider(
     embeddings matches the number of submitted inputs.
     """
 
-    # Microsoft Foundry / Azure OpenAI embedding API limits.
+    # ========================================================
+    # API LIMITS
+    # ========================================================
+
     MAX_INPUTS_PER_REQUEST = 2048
+
     MAX_TOKENS_PER_REQUEST = 300_000
+
     MAX_TOKENS_PER_INPUT = 8_192
+
+    # ========================================================
+    # INITIALIZATION
+    # ========================================================
 
     def __init__(
         self,
@@ -48,27 +66,68 @@ class MicrosoftFoundryEmbeddingProvider(
             associated with the configured embedding model.
 
         Important:
-            foundry_embedding_model_name is used for tokenizer
-            selection.
 
-            foundry_embedding_deployment_name is used when
-            calling the Microsoft Foundry embedding API.
+            foundry_embedding_model_name
+                is used for tokenizer selection and
+                logical model identification.
+
+            foundry_embedding_deployment_name
+                is used for the actual Foundry API call.
         """
 
-        self.credential = DefaultAzureCredential()
+        # ----------------------------------------------------
+        # SYNCHRONOUS CLIENT
+        # ----------------------------------------------------
 
-        self.project_client = AIProjectClient(
-            endpoint=settings.foundry_project_endpoint,
-            credential=self.credential,
+        self.credential = (
+            DefaultAzureCredential()
+        )
+
+        self.project_client = (
+            AIProjectClient(
+                endpoint=(
+                    settings.foundry_project_endpoint
+                ),
+                credential=self.credential,
+            )
         )
 
         self.openai_client = (
             self.project_client.get_openai_client()
         )
 
-        # Inject the tokenizer so token counting is consistent
-        # with the configured embedding model.
+        # ----------------------------------------------------
+        # ASYNCHRONOUS CLIENT
+        # ----------------------------------------------------
+
+        self.async_credential = (
+            AsyncDefaultAzureCredential()
+        )
+
+        self.async_project_client = (
+            AsyncAIProjectClient(
+                endpoint=(
+                    settings.foundry_project_endpoint
+                ),
+                credential=self.async_credential,
+            )
+        )
+
+        self.async_openai_client = (
+            self.async_project_client.get_openai_client()
+        )
+
+        # ----------------------------------------------------
+        # TOKENIZER
+        # ----------------------------------------------------
+
+        # Inject the tokenizer so token counting remains
+        # consistent with the configured embedding model.
         self.token_counter = token_counter
+
+    # ========================================================
+    # SYNCHRONOUS SINGLE EMBEDDING
+    # ========================================================
 
     def generate(
         self,
@@ -78,33 +137,112 @@ class MicrosoftFoundryEmbeddingProvider(
         Generate an embedding for a single text input.
         """
 
-        # Validate input before calling the provider.
+        # ----------------------------------------------------
+        # VALIDATION
+        # ----------------------------------------------------
+
         self._validate_single_input(
             request.text
         )
 
-        response = self.openai_client.embeddings.create(
-            # Deployment name is used for the actual Foundry API call.
-            model=settings.foundry_embedding_deployment_name,
-            input=request.text,
+        # ----------------------------------------------------
+        # FOUNDRY REQUEST
+        # ----------------------------------------------------
+
+        response = (
+            self.openai_client.embeddings.create(
+                # Actual Foundry deployment name.
+                model=(
+                    settings.foundry_embedding_deployment_name
+                ),
+                input=request.text,
+            )
         )
 
-        # A single input must produce exactly one embedding.
+        # ----------------------------------------------------
+        # RESPONSE VALIDATION
+        # ----------------------------------------------------
+
         if len(response.data) != 1:
             raise ValueError(
                 "Embedding response count does not match "
-                "single input count"
+                "single input count."
             )
 
         return EmbeddingResponse(
             vector=response.data[0].embedding,
 
-            # Return the configured model name as the logical
-            # embedding model, not the deployment identifier.
-            model=settings.foundry_embedding_model_name,
+            # Logical model name.
+            model=(
+                settings.foundry_embedding_model_name
+            ),
 
             provider="microsoft_foundry",
         )
+
+    # ========================================================
+    # ASYNCHRONOUS SINGLE EMBEDDING
+    # ========================================================
+
+    async def agenerate(
+        self,
+        request: EmbeddingRequest,
+    ) -> EmbeddingResponse:
+        """
+        Generate an embedding asynchronously for a single
+        text input.
+
+        This method is used by the asynchronous query and
+        retrieval pipeline.
+        """
+
+        # ----------------------------------------------------
+        # VALIDATION
+        # ----------------------------------------------------
+
+        self._validate_single_input(
+            request.text
+        )
+
+        # ----------------------------------------------------
+        # FOUNDRY ASYNC REQUEST
+        # ----------------------------------------------------
+
+        response = (
+            await self.async_openai_client
+            .embeddings.create(
+                # Actual Foundry deployment name.
+                model=(
+                    settings.foundry_embedding_deployment_name
+                ),
+                input=request.text,
+            )
+        )
+
+        # ----------------------------------------------------
+        # RESPONSE VALIDATION
+        # ----------------------------------------------------
+
+        if len(response.data) != 1:
+            raise ValueError(
+                "Embedding response count does not match "
+                "single input count."
+            )
+
+        return EmbeddingResponse(
+            vector=response.data[0].embedding,
+
+            # Logical model name.
+            model=(
+                settings.foundry_embedding_model_name
+            ),
+
+            provider="microsoft_foundry",
+        )
+
+    # ========================================================
+    # SYNCHRONOUS BATCH EMBEDDING
+    # ========================================================
 
     def generate_batch(
         self,
@@ -113,8 +251,8 @@ class MicrosoftFoundryEmbeddingProvider(
         """
         Generate embeddings for multiple text inputs.
 
-        Large input lists are automatically divided into safe
-        API batches based on:
+        Large input lists are automatically divided into
+        safe API batches based on:
 
         1. Maximum number of inputs.
         2. Maximum aggregate token count.
@@ -125,54 +263,54 @@ class MicrosoftFoundryEmbeddingProvider(
         if not request.texts:
             return EmbeddingBatchResponse(
                 vectors=[],
-                model=settings.foundry_embedding_model_name,
+                model=(
+                    settings.foundry_embedding_model_name
+                ),
                 provider="microsoft_foundry",
             )
 
-        # Build API-safe batches.
+        # ----------------------------------------------------
+        # BUILD API-SAFE BATCHES
+        # ----------------------------------------------------
+
         batches = self._build_safe_batches(
             request.texts
         )
 
         all_vectors: list[list[float]] = []
 
+        # ----------------------------------------------------
+        # PROCESS BATCHES
+        # ----------------------------------------------------
+
         for batch in batches:
 
             # Send one safe batch to Microsoft Foundry.
-            response = self._generate_batch_request(
-                batch
+            response = (
+                self._generate_batch_request(
+                    batch
+                )
             )
 
-            # --------------------------------------------------
+            # ------------------------------------------------
             # PER-BATCH VALIDATION
-            # --------------------------------------------------
+            # ------------------------------------------------
 
-            # Number of returned embeddings must equal the
-            # number of submitted inputs for this batch.
             if len(response.data) != len(batch):
                 raise ValueError(
-                    "Embedding response count does not match "
-                    "input count for batch"
+                    "Embedding response count does not "
+                    "match input count for batch."
                 )
 
-            # The API returns an index for each embedding.
-            # Sort by index so the vector order matches the
-            # original input order.
+            # ------------------------------------------------
+            # PRESERVE INPUT ORDER
+            # ------------------------------------------------
+
             ordered_data = sorted(
                 response.data,
                 key=lambda item: item.index,
             )
 
-            # Keep vectors as:
-            #
-            # list[list[float]]
-            #
-            # Example:
-            #
-            # [
-            #     [0.1, 0.2, ...],
-            #     [0.4, 0.8, ...],
-            # ]
             all_vectors.extend(
                 item.embedding
                 for item in ordered_data
@@ -182,23 +320,23 @@ class MicrosoftFoundryEmbeddingProvider(
         # FINAL GLOBAL VALIDATION
         # ------------------------------------------------------
 
-        # After combining all batches:
-        #
-        # total inputs == total vectors
-        #
-        # This guarantees that the one-to-one relationship
-        # between DocumentChunks and embeddings is preserved.
         if len(all_vectors) != len(request.texts):
             raise ValueError(
                 "Total embedding count does not match "
-                "total input count"
+                "total input count."
             )
 
         return EmbeddingBatchResponse(
             vectors=all_vectors,
-            model=settings.foundry_embedding_model_name,
+            model=(
+                settings.foundry_embedding_model_name
+            ),
             provider="microsoft_foundry",
         )
+
+    # ========================================================
+    # SAFE BATCH BUILDING
+    # ========================================================
 
     def _build_safe_batches(
         self,
@@ -221,61 +359,55 @@ class MicrosoftFoundryEmbeddingProvider(
         batches: list[list[str]] = []
 
         current_batch: list[str] = []
+
         current_token_count = 0
 
         for text in texts:
 
-            # Count tokens using the tokenizer associated with
-            # the configured embedding model.
-            token_count = self.token_counter(text)
+            # ------------------------------------------------
+            # TOKEN COUNT
+            # ------------------------------------------------
 
-            # --------------------------------------------------
+            token_count = self.token_counter(
+                text
+            )
+
+            # ------------------------------------------------
             # SINGLE INPUT VALIDATION
-            # --------------------------------------------------
+            # ------------------------------------------------
 
-            if token_count > self.MAX_TOKENS_PER_INPUT:
+            if (
+                token_count
+                > self.MAX_TOKENS_PER_INPUT
+            ):
                 raise ValueError(
                     "Embedding input exceeds the maximum "
                     f"allowed size of "
                     f"{self.MAX_TOKENS_PER_INPUT} tokens."
                 )
 
-            # --------------------------------------------------
-            # BATCH LIMIT CHECKS
-            # --------------------------------------------------
+            # ------------------------------------------------
+            # INPUT LIMIT CHECK
+            # ------------------------------------------------
 
-            # This check happens BEFORE adding the next input.
-            #
-            # Example:
-            #
-            # MAX = 2048
-            # current = 2048
-            #
-            # 2048 >= 2048 -> True
-            #
-            # Therefore the next input starts a new batch.
             would_exceed_input_limit = (
                 len(current_batch)
                 >= self.MAX_INPUTS_PER_REQUEST
             )
 
-            # Exact equality is valid, so use >.
-            #
-            # Example:
-            #
-            # MAX = 300000
-            # current + next = 300000
-            #
-            # 300000 > 300000 -> False
+            # ------------------------------------------------
+            # TOKEN LIMIT CHECK
+            # ------------------------------------------------
+
             would_exceed_token_limit = (
                 current_token_count
                 + token_count
                 > self.MAX_TOKENS_PER_REQUEST
             )
 
-            # --------------------------------------------------
-            # START A NEW BATCH IF REQUIRED
-            # --------------------------------------------------
+            # ------------------------------------------------
+            # START NEW BATCH
+            # ------------------------------------------------
 
             if (
                 current_batch
@@ -289,14 +421,25 @@ class MicrosoftFoundryEmbeddingProvider(
                 )
 
                 current_batch = []
+
                 current_token_count = 0
 
-            # Add current input to the active batch.
-            current_batch.append(text)
+            # ------------------------------------------------
+            # ADD INPUT
+            # ------------------------------------------------
 
-            current_token_count += token_count
+            current_batch.append(
+                text
+            )
 
-        # Add final batch.
+            current_token_count += (
+                token_count
+            )
+
+        # ----------------------------------------------------
+        # FINAL BATCH
+        # ----------------------------------------------------
+
         if current_batch:
             batches.append(
                 current_batch
@@ -304,20 +447,32 @@ class MicrosoftFoundryEmbeddingProvider(
 
         return batches
 
+    # ========================================================
+    # BATCH API REQUEST
+    # ========================================================
+
     def _generate_batch_request(
         self,
         texts: list[str],
     ):
         """
-        Send one already-validated batch to Microsoft Foundry.
+        Send one already-validated batch to
+        Microsoft Foundry.
         """
 
-        return self.openai_client.embeddings.create(
-            # IMPORTANT:
-            # Foundry API expects the deployment name here.
-            model=settings.foundry_embedding_deployment_name,
-            input=texts,
+        return (
+            self.openai_client.embeddings.create(
+                # Actual Foundry deployment name.
+                model=(
+                    settings.foundry_embedding_deployment_name
+                ),
+                input=texts,
+            )
         )
+
+    # ========================================================
+    # SINGLE INPUT VALIDATION
+    # ========================================================
 
     def _validate_single_input(
         self,
@@ -332,21 +487,30 @@ class MicrosoftFoundryEmbeddingProvider(
                 "Embedding input cannot be empty."
             )
 
-        # Token count uses the tokenizer corresponding to the
-        # embedding MODEL name.
-        token_count = self.token_counter(text)
+        # Token count uses the tokenizer corresponding
+        # to the embedding MODEL name.
+        token_count = self.token_counter(
+            text
+        )
 
-        if token_count > self.MAX_TOKENS_PER_INPUT:
+        if (
+            token_count
+            > self.MAX_TOKENS_PER_INPUT
+        ):
             raise ValueError(
                 "Embedding input exceeds the maximum "
                 f"allowed size of "
                 f"{self.MAX_TOKENS_PER_INPUT} tokens."
             )
 
+    # ========================================================
+    # VECTOR DIMENSION
+    # ========================================================
+
     def get_dimension(self) -> int:
         """
-        Return the embedding vector dimension for the configured
-        embedding model.
+        Return the embedding vector dimension for the
+        configured embedding model.
         """
 
         if settings.foundry_embedding_model_name == (
@@ -408,3 +572,20 @@ class MicrosoftFoundryEmbeddingProvider(
 #
 # This is important because an Azure / Foundry deployment name
 # can be different from the underlying model name.
+#
+#
+# ============================================================
+# ASYNC QUERY PATH
+# ============================================================
+#
+# Query
+#   ↓
+# EmbeddingProvider.agenerate()
+#   ↓
+# MicrosoftFoundryEmbeddingProvider.agenerate()
+#   ↓
+# AsyncOpenAI
+#   ↓
+# Microsoft Foundry
+#   ↓
+# EmbeddingResponse

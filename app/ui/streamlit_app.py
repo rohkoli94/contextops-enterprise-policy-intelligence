@@ -36,6 +36,7 @@ with query_column:
     )
 
     with st.form("query_form"):
+
         question = st.text_area(
             "Your Question",
             placeholder=(
@@ -45,46 +46,192 @@ with query_column:
             height=220,
         )
 
+        # ------------------------------------
+        # TENANT
+        # ------------------------------------
+
+        tenant_id = st.text_input(
+            "Tenant ID",
+            value=settings.default_tenant_id,
+            placeholder="Enter tenant ID",
+        )
+
+        # ------------------------------------
+        # OPTIONAL RETRIEVAL FILTERS
+        # ------------------------------------
+
+        with st.expander(
+            "🔎 Retrieval Filters",
+            expanded=False,
+        ):
+
+            document_id = st.text_input(
+                "Document ID",
+                placeholder="Optional",
+            )
+
+            document_version_id = st.text_input(
+                "Document Version ID",
+                placeholder="Optional",
+            )
+
+            categories_input = st.text_input(
+                "Categories",
+                placeholder="HR, Security",
+            )
+
+            tags_input = st.text_input(
+                "Tags",
+                placeholder="remote-work, employee",
+            )
+
+            content_type = st.selectbox(
+                "Content Type",
+                options=[
+                    "",
+                    "text",
+                    "table",
+                    "image",
+                    "chart",
+                    "diagram",
+                ],
+            )
+
         ask_clicked = st.form_submit_button(
             "Ask Question",
             use_container_width=True,
         )
 
     if ask_clicked:
+
+        # ------------------------------------
+        # VALIDATION
+        # ------------------------------------
+
         if not question.strip():
-            st.warning("Please enter a question.")
+            st.warning(
+                "Please enter a question."
+            )
+
+        elif not tenant_id.strip():
+            st.warning(
+                "Please enter a tenant ID."
+            )
 
         else:
+
             try:
-                with st.spinner("Getting answer..."):
+                # ------------------------------------
+                # BUILD FILTERS
+                # ------------------------------------
+
+                filters = {}
+
+                if document_id.strip():
+                    filters["document_id"] = (
+                        document_id.strip()
+                    )
+
+                if document_version_id.strip():
+                    filters["document_version_id"] = (
+                        document_version_id.strip()
+                    )
+
+                categories = [
+                    category.strip()
+                    for category in (
+                        categories_input.split(",")
+                    )
+                    if category.strip()
+                ]
+
+                if categories:
+                    filters["categories"] = categories
+
+                tags = [
+                    tag.strip()
+                    for tag in tags_input.split(",")
+                    if tag.strip()
+                ]
+
+                if tags:
+                    filters["tags"] = tags
+
+                if content_type:
+                    filters["content_type"] = (
+                        content_type
+                    )
+
+                # ------------------------------------
+                # QUERY PAYLOAD
+                # ------------------------------------
+
+                payload = {
+                    "query": question.strip(),
+                    "tenant_id": tenant_id.strip(),
+                }
+
+                if filters:
+                    payload["filters"] = filters
+
+                # ------------------------------------
+                # API CALL
+                # ------------------------------------
+
+                with st.spinner(
+                    "Getting answer..."
+                ):
                     response = requests.post(
-                        f"{settings.api_base_url}/api/v1/query",
-                        json={"query": question},
-                        timeout=30,
+                        f"{settings.api_base_url}"
+                        f"/api/v1/query",
+                        json=payload,
+                        timeout=60,
                     )
 
                 response.raise_for_status()
+
                 result = response.json()
 
+                # ------------------------------------
+                # DISPLAY ANSWER
+                # ------------------------------------
+
                 st.divider()
+
                 st.subheader("Answer")
 
-                with st.container(border=True):
-                    st.write(result["answer"])
+                with st.container(
+                    border=True
+                ):
+                    st.write(
+                        result["answer"]
+                    )
 
             except requests.HTTPError as http_err:
+
                 st.error(
-                    f"HTTP error occurred: {http_err}"
+                    f"HTTP error occurred: "
+                    f"{http_err}"
                 )
+
                 st.text(
-                    f"Response content: {response.text}"
+                    f"Response content: "
+                    f"{response.text}"
                 )
 
             except requests.RequestException as req_err:
-                st.error(f"Request error: {req_err}")
+
+                st.error(
+                    f"Request error: "
+                    f"{req_err}"
+                )
 
             except Exception as e:
-                st.error(f"Unexpected error: {e}")
+
+                st.error(
+                    f"Unexpected error: "
+                    f"{e}"
+                )
 
 
 # ========================================
@@ -102,7 +249,10 @@ with document_column:
         "➕ Upload New Document",
         expanded=False,
     ):
-        with st.form("upload_document_form"):
+        with st.form(
+            "upload_document_form"
+        ):
+
             uploaded_file = st.file_uploader(
                 "Select PDF",
                 type=["pdf"],
@@ -130,38 +280,57 @@ with document_column:
             )
 
         if upload_document_clicked:
+
             if uploaded_file is None:
-                st.warning("Please select a document.")
+                st.warning(
+                    "Please select a document."
+                )
 
             elif not document_name.strip():
-                st.warning("Please enter a document name.")
+                st.warning(
+                    "Please enter a document name."
+                )
 
             else:
+
                 try:
                     categories = [
                         category.strip()
-                        for category in categories_input.split(",")
+                        for category in (
+                            categories_input.split(",")
+                        )
                         if category.strip()
                     ]
 
                     tags = [
                         tag.strip()
-                        for tag in tags_input.split(",")
+                        for tag in (
+                            tags_input.split(",")
+                        )
                         if tag.strip()
                     ]
 
                     form_data = [
-                        ("document_name", document_name),
+                        (
+                            "document_name",
+                            document_name,
+                        ),
                     ]
 
                     for category in categories:
                         form_data.append(
-                            ("categories", category)
+                            (
+                                "categories",
+                                category,
+                            )
                         )
 
                     for tag in tags:
                         form_data.append(
-                            ("tags", tag)
+                            (
+                                "tags",
+                                tag,
+                            )
                         )
 
                     uploaded_file.seek(0)
@@ -175,7 +344,9 @@ with document_column:
                         )
                     }
 
-                    with st.spinner("Uploading..."):
+                    with st.spinner(
+                        "Uploading..."
+                    ):
                         response = requests.post(
                             f"{settings.api_base_url}"
                             f"/api/v1/documents",
@@ -196,48 +367,76 @@ with document_column:
                     st.rerun()
 
                 except requests.HTTPError as http_err:
+
                     st.error(
-                        f"HTTP error occurred: {http_err}"
+                        f"HTTP error occurred: "
+                        f"{http_err}"
                     )
+
                     st.text(
-                        f"Response content: {response.text}"
+                        f"Response content: "
+                        f"{response.text}"
                     )
 
                 except requests.RequestException as req_err:
-                    st.error(f"Request error: {req_err}")
+
+                    st.error(
+                        f"Request error: "
+                        f"{req_err}"
+                    )
 
                 except Exception as e:
-                    st.error(f"Unexpected error: {e}")
+
+                    st.error(
+                        f"Unexpected error: "
+                        f"{e}"
+                    )
 
     # ------------------------------------
     # Active Documents
     # ------------------------------------
 
     st.divider()
-    st.subheader("Active Documents")
+
+    st.subheader(
+        "Active Documents"
+    )
 
     try:
+
         response = requests.get(
-            f"{settings.api_base_url}/api/v1/documents",
+            f"{settings.api_base_url}"
+            f"/api/v1/documents",
             timeout=30,
         )
 
         response.raise_for_status()
 
-        documents = response.json()["documents"]
+        documents = response.json()[
+            "documents"
+        ]
 
         if not documents:
-            st.info("No documents uploaded.")
+
+            st.info(
+                "No documents uploaded."
+            )
 
         else:
+
             for document in documents:
-                with st.container(border=True):
+
+                with st.container(
+                    border=True
+                ):
+
                     st.write(
                         f"**{document['document_name']}**"
                     )
 
                     st.caption(
-                        f"Version v{document['current_version']}"
+                        f"Version "
+                        f"v{document['current_version']}"
                     )
 
                     categories = document.get(
@@ -253,13 +452,17 @@ with document_column:
                     if categories:
                         st.caption(
                             "📁 "
-                            + ", ".join(categories)
+                            + ", ".join(
+                                categories
+                            )
                         )
 
                     if tags:
                         st.caption(
                             "🏷️ "
-                            + ", ".join(tags)
+                            + ", ".join(
+                                tags
+                            )
                         )
 
                     if st.button(
@@ -270,17 +473,26 @@ with document_column:
                         ),
                         use_container_width=True,
                     ):
-                        st.session_state.selected_document_id = (
-                            document["document_id"]
-                        )
-                        st.session_state.selected_document_name = (
-                            document["document_name"]
-                        )
+
+                        st.session_state[
+                            "selected_document_id"
+                        ] = document[
+                            "document_id"
+                        ]
+
+                        st.session_state[
+                            "selected_document_name"
+                        ] = document[
+                            "document_name"
+                        ]
+
                         st.rerun()
 
     except requests.RequestException as e:
+
         st.error(
-            f"Unable to load documents: {e}"
+            f"Unable to load documents: "
+            f"{e}"
         )
 
 
@@ -289,7 +501,11 @@ with document_column:
 # Shows below the main workspace
 # ========================================
 
-if "selected_document_id" in st.session_state:
+if (
+    "selected_document_id"
+    in st.session_state
+):
+
     st.divider()
 
     st.subheader(
@@ -297,16 +513,22 @@ if "selected_document_id" in st.session_state:
         f"{st.session_state.selected_document_name}"
     )
 
-    with st.form("upload_version_form"):
+    with st.form(
+        "upload_version_form"
+    ):
+
         version_file = st.file_uploader(
             "Select New PDF Version",
             type=["pdf"],
             key="new_version",
         )
 
-        upload_col, cancel_col = st.columns([3, 1])
+        upload_col, cancel_col = st.columns(
+            [3, 1]
+        )
 
         with upload_col:
+
             upload_version_clicked = (
                 st.form_submit_button(
                     "Upload New Version",
@@ -315,22 +537,38 @@ if "selected_document_id" in st.session_state:
             )
 
         with cancel_col:
-            cancel_clicked = st.form_submit_button(
-                "Cancel",
-                use_container_width=True,
+
+            cancel_clicked = (
+                st.form_submit_button(
+                    "Cancel",
+                    use_container_width=True,
+                )
             )
 
     if cancel_clicked:
-        del st.session_state.selected_document_id
-        del st.session_state.selected_document_name
+
+        del st.session_state[
+            "selected_document_id"
+        ]
+
+        del st.session_state[
+            "selected_document_name"
+        ]
+
         st.rerun()
 
     if upload_version_clicked:
+
         if version_file is None:
-            st.warning("Please select a document.")
+
+            st.warning(
+                "Please select a document."
+            )
 
         else:
+
             try:
+
                 version_file.seek(0)
 
                 files = {
@@ -342,7 +580,10 @@ if "selected_document_id" in st.session_state:
                     )
                 }
 
-                with st.spinner("Uploading new version..."):
+                with st.spinner(
+                    "Uploading new version..."
+                ):
+
                     response = requests.post(
                         f"{settings.api_base_url}"
                         f"/api/v1/documents/"
@@ -353,6 +594,7 @@ if "selected_document_id" in st.session_state:
                     )
 
                 response.raise_for_status()
+
                 result = response.json()
 
                 st.success(
@@ -360,21 +602,38 @@ if "selected_document_id" in st.session_state:
                     f"uploaded successfully!"
                 )
 
-                del st.session_state.selected_document_id
-                del st.session_state.selected_document_name
+                del st.session_state[
+                    "selected_document_id"
+                ]
+
+                del st.session_state[
+                    "selected_document_name"
+                ]
 
                 st.rerun()
 
             except requests.HTTPError as http_err:
+
                 st.error(
-                    f"HTTP error occurred: {http_err}"
+                    f"HTTP error occurred: "
+                    f"{http_err}"
                 )
+
                 st.text(
-                    f"Response content: {response.text}"
+                    f"Response content: "
+                    f"{response.text}"
                 )
 
             except requests.RequestException as req_err:
-                st.error(f"Request error: {req_err}")
+
+                st.error(
+                    f"Request error: "
+                    f"{req_err}"
+                )
 
             except Exception as e:
-                st.error(f"Unexpected error: {e}")
+
+                st.error(
+                    f"Unexpected error: "
+                    f"{e}"
+                )

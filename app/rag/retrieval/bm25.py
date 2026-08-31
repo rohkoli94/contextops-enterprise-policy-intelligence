@@ -10,6 +10,8 @@ class BM25Retriever(RetrievalProvider):
     """
     Sparse lexical / BM25 retriever.
 
+    The query path is asynchronous.
+
     Flow:
 
         User Query
@@ -18,7 +20,7 @@ class BM25Retriever(RetrievalProvider):
             ↓
         BM25 Sparse Query
             ↓
-        VectorStore.search_sparse()
+        VectorStore.asearch_sparse()
             ↓
         Qdrant BM25 Search
             ↓
@@ -35,7 +37,7 @@ class BM25Retriever(RetrievalProvider):
         )
         self.vector_store = vector_store
 
-    def retrieve(
+    async def aretrieve(
         self,
         query: str,
         tenant_id: str,
@@ -43,31 +45,16 @@ class BM25Retriever(RetrievalProvider):
         filters: dict[str, object] | None = None,
     ) -> list[RetrievedChunk]:
         """
-        Retrieve the most lexically relevant document chunks
-        using BM25 sparse retrieval.
+        Asynchronously retrieve the most lexically relevant
+        document chunks using BM25 sparse retrieval.
         """
-
-        if not query or not query.strip():
-            raise ValueError(
-                "Query cannot be empty."
-            )
-
-        if not tenant_id or not tenant_id.strip():
-            raise ValueError(
-                "Tenant ID cannot be empty."
-            )
-
-        if top_k <= 0:
-            raise ValueError(
-                "top_k must be greater than zero."
-            )
 
         # --------------------------------------------------
         # STEP 1 — GENERATE BM25 SPARSE QUERY
         # --------------------------------------------------
 
         sparse_query = (
-            self.sparse_embedding_provider.generate(
+            await self.sparse_embedding_provider.agenerate(
                 query
             )
         )
@@ -76,7 +63,7 @@ class BM25Retriever(RetrievalProvider):
         # STEP 2 — BM25 SEARCH
         # --------------------------------------------------
 
-        return self.vector_store.search_sparse(
+        return await self.vector_store.asearch_sparse(
             sparse_query=sparse_query,
             tenant_id=tenant_id,
             top_k=top_k,

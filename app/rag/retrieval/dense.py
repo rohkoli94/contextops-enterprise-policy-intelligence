@@ -11,6 +11,8 @@ class DenseRetriever(RetrievalProvider):
     """
     Dense semantic retriever.
 
+    The query path is asynchronous.
+
     Flow:
 
         User Query
@@ -19,7 +21,7 @@ class DenseRetriever(RetrievalProvider):
             ↓
         Query Vector
             ↓
-        VectorStore.search_dense()
+        VectorStore.asearch_dense()
             ↓
         Qdrant Dense ANN Search
             ↓
@@ -34,7 +36,7 @@ class DenseRetriever(RetrievalProvider):
         self.embedding_provider = embedding_provider
         self.vector_store = vector_store
 
-    def retrieve(
+    async def aretrieve(
         self,
         query: str,
         tenant_id: str,
@@ -42,30 +44,16 @@ class DenseRetriever(RetrievalProvider):
         filters: dict[str, object] | None = None,
     ) -> list[RetrievedChunk]:
         """
-        Retrieve the most semantically similar document chunks.
+        Asynchronously retrieve the most semantically similar
+        document chunks.
         """
-
-        if not query or not query.strip():
-            raise ValueError(
-                "Query cannot be empty."
-            )
-
-        if not tenant_id or not tenant_id.strip():
-            raise ValueError(
-                "Tenant ID cannot be empty."
-            )
-
-        if top_k <= 0:
-            raise ValueError(
-                "top_k must be greater than zero."
-            )
 
         # --------------------------------------------------
         # STEP 1 — EMBED QUERY
         # --------------------------------------------------
 
         embedding_response = (
-            self.embedding_provider.generate(
+            await self.embedding_provider.agenerate(
                 EmbeddingRequest(
                     text=query,
                 )
@@ -78,7 +66,7 @@ class DenseRetriever(RetrievalProvider):
         # STEP 2 — DENSE SEARCH
         # --------------------------------------------------
 
-        return self.vector_store.search_dense(
+        return await self.vector_store.asearch_dense(
             query_vector=query_vector,
             tenant_id=tenant_id,
             top_k=top_k,

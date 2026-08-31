@@ -822,6 +822,67 @@ RRF
 RetrievedChunk[]
 ```
 
+## Day 17 — Query Service & Async Query Pipeline
+
+Implemented the application query layer and connected retrieval, LangChain, Qdrant and Microsoft Foundry into an asynchronous query flow.
+
+### Changes
+- Added LangChainRetrieverAdapter and async ainvoke() retrieval
+- Added async dense, BM25 and hybrid retrieval
+- Added async Qdrant search with native RRF
+- Added typed QueryFilter and tenant-aware filtering
+- Rebuilt QueryService for retrieval → context → LLM
+- Added async LLM generation with Microsoft Foundry
+- Added Azure and Qdrant async client cleanup
+- Added FastAPI startup composition with shared QueryService in app.state
+- Updated query router and Streamlit filters
+- Added aiohttp for Azure async support
+- Verified Docker startup and end-to-end query flow
+
+
+Query Architecture
+```text
+User Query
+    ↓
+FastAPI
+    ↓
+QueryService
+    ↓
+LangChain Retriever
+    ↓
+HybridRetriever
+    ├── Dense Embedding
+    └── BM25 Sparse Embedding
+            ↓
+        Qdrant Hybrid Search
+            ↓
+           RRF
+            ↓
+     Retrieved Documents
+            ↓
+        Context Builder
+            ↓
+   Microsoft Foundry LLM
+            ↓
+        QueryResponse
+```
+
+Application Lifecycle
+```text
+FastAPI Startup
+      ↓
+Create shared providers/services
+      ↓
+Store QueryService in app.state
+      ↓
+Requests reuse shared services
+      ↓
+FastAPI Shutdown
+      ↓
+Close Azure + Qdrant async clients
+```
+
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -840,3 +901,4 @@ RetrievedChunk[]
 - Day 14 — Qdrant Vector Store & Ingestion Integration ✅
 - Day 15 — Dense Retrieval Foundation + LangChain + LangGraph ✅
 - Day 16 — Hybrid Retrieval Foundation ✅
+- Day 17 — Query Service & Async Query Pipeline ✅

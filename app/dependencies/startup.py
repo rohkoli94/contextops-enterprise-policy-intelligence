@@ -1,3 +1,9 @@
+from fastapi import FastAPI, Request
+
+from app.dependencies.container import (
+    create_query_service,
+)
+
 from app.dependencies.rag import (
     get_embedding_provider,
     get_sparse_embedding_provider,
@@ -65,3 +71,51 @@ def initialize_rag() -> None:
     vector_store.ensure_collection(
         vector_size=vector_size,
     )
+
+
+def initialize_application(
+    app: FastAPI,
+) -> None:
+    """
+    Initialize shared application infrastructure and services.
+
+    All long-lived components are created once during
+    application startup and stored in application state.
+    """
+
+    # --------------------------------------------------
+    # STEP 1 — RAG INFRASTRUCTURE
+    # --------------------------------------------------
+
+    initialize_rag()
+
+    # --------------------------------------------------
+    # STEP 2 — QUERY SERVICE
+    # --------------------------------------------------
+
+    # QueryService is composed once during application startup.
+    #
+    # It reuses the shared:
+    #
+    # - Microsoft Foundry LLM provider
+    # - HybridRetriever
+    #
+    # The same QueryService instance is reused by
+    # subsequent HTTP requests.
+
+    app.state.query_service = (
+        create_query_service()
+    )
+
+
+def get_query_service(
+    request: Request,
+):
+    """
+    Return the application-scoped QueryService.
+
+    The QueryService is created once during startup and
+    retrieved from FastAPI application state for each request.
+    """
+
+    return request.app.state.query_service

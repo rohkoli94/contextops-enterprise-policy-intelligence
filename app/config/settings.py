@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     #FastEmbed - For production Docker, we'll later override it with something such as:/app/.cache/fastembed
     fastembed_cache_dir: str = ".cache/fastembed" 
 
+    retrieval_top_k: int = 10
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

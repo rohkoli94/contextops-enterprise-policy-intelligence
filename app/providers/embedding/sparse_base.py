@@ -9,7 +9,14 @@ class SparseEmbeddingProvider(ABC):
 
     Implementations can generate lexical/sparse
     representations such as BM25.
+
+    The query/retrieval path supports asynchronous
+    sparse embedding generation.
     """
+
+    # ========================================================
+    # SYNCHRONOUS SINGLE GENERATION
+    # ========================================================
 
     @abstractmethod
     def generate(
@@ -21,6 +28,27 @@ class SparseEmbeddingProvider(ABC):
         """
         raise NotImplementedError
 
+    # ========================================================
+    # ASYNCHRONOUS SINGLE GENERATION
+    # ========================================================
+
+    @abstractmethod
+    async def agenerate(
+        self,
+        text: str,
+    ) -> SparseEmbedding:
+        """
+        Generate a sparse representation asynchronously
+        for one text.
+
+        Used by the asynchronous query/retrieval path.
+        """
+        raise NotImplementedError
+
+    # ========================================================
+    # SYNCHRONOUS BATCH GENERATION
+    # ========================================================
+
     @abstractmethod
     def generate_batch(
         self,
@@ -28,5 +56,7 @@ class SparseEmbeddingProvider(ABC):
     ) -> list[SparseEmbedding]:
         """
         Generate sparse representations for multiple texts.
+
+        Used by the document ingestion pipeline.
         """
         raise NotImplementedError
