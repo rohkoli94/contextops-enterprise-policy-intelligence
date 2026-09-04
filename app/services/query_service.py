@@ -1,74 +1,67 @@
 from typing import Any
 
-from langchain_core.documents import Document
-from langchain_core.retrievers import BaseRetriever
-
-from app.config.settings import settings
-from app.providers.llm.base import (
-    LLMProvider,
-    LLMRequest,
-    LLMResponse,
-)
-from app.rag.retrieval.langchain_retriever import (
-    LangChainRetrieverAdapter,
-)
-
 from app.api.v1.query.schemas.query_filter import (
     QueryFilter,
 )
+from app.rag.workflow.graph import (
+    create_query_graph,
+)
+from app.rag.workflow.state import QueryState
+
 
 class QueryService:
     """
-    Application service responsible for answering
-    enterprise policy questions.
+    Thin application service for executing the ContextOps
+    LangGraph query workflow.
 
-    Query flow:
+    The service is intentionally NOT responsible for:
+        - retrieval
+        - reranking
+        - context construction
+        - query rewriting
+        - caching
+        - LLM generation
+        - grounding validation
 
-        User Question
-            ↓
-        QueryService
-            ↓
-        LangChain Retriever
-            ↓
-        Hybrid Retrieval
-            ↓
-        Retrieved Documents
-            ↓
-        Context Construction
-            ↓
-        LLM
-            ↓
-        Grounded Answer
+    Those responsibilities belong to the LangGraph workflow.
     """
 
     def __init__(
         self,
-        llm_provider: LLMProvider,
-        hybrid_retriever: BaseRetriever,
+        query_graph,
     ) -> None:
-        self.llm_provider = llm_provider
-        self.hybrid_retriever = hybrid_retriever
+        """
+        Store the already-compiled application-scoped graph.
+
+        The graph is created once during FastAPI startup and
+        reused across requests.
+        """
+
+        self.query_graph = query_graph
+
+    # ========================================================
+    # QUERY
+    # ========================================================
 
     async def ask(
         self,
+        *,
         question: str,
         tenant_id: str,
+        conversation_id: str | None = None,
         filters: QueryFilter | None = None,
-    ) -> LLMResponse:
+    ) -> dict[str, Any]:
         """
-        Answer a user question using tenant-aware hybrid
-        retrieval and the configured LLM provider.
+        Execute the complete ContextOps query workflow.
+
+        Request-specific state is created here.
+
+        The compiled LangGraph itself is shared across requests.
         """
 
-        retrieval_filters = (
-            filters.model_dump(exclude_none=True)
-            if filters
-            else None
-        )
-        
-        # --------------------------------------------------
-        # VALIDATION
-        # --------------------------------------------------
+        # ----------------------------------------------------
+        # REQUEST VALIDATION
+        # ----------------------------------------------------
 
         if not question or not question.strip():
             raise ValueError(
@@ -80,109 +73,42 @@ class QueryService:
                 "Tenant ID cannot be empty."
             )
 
-        # --------------------------------------------------
-        # STEP 1 — RETRIEVAL CONFIGURATION
-        # --------------------------------------------------
-
-        # top_k comes from application configuration.
+        # ----------------------------------------------------
+        # FILTER CONVERSION
+        # ----------------------------------------------------
         #
-        # It is intentionally not hardcoded here.
+        # API layer uses the strongly typed QueryFilter model.
         #
-        # Example:
+        # LangGraph state keeps the transport-neutral dictionary
+        # representation used by retrieval components.
         #
-        # RETRIEVAL_TOP_K=10
 
-        retriever = LangChainRetrieverAdapter(
-            hybrid_retriever=self.hybrid_retriever,
-            tenant_id=tenant_id,
-            top_k=settings.retrieval_top_k,
-            filters=retrieval_filters,
-        )
-
-        # --------------------------------------------------
-        # STEP 2 — ASYNC HYBRID RETRIEVAL
-        # --------------------------------------------------
-
-        documents = await retriever.ainvoke(
-            question
-        )
-
-        # --------------------------------------------------
-        # STEP 3 — BUILD LLM CONTEXT
-        # --------------------------------------------------
-
-        context = self._build_context(
-            documents
-        )
-
-        # --------------------------------------------------
-        # STEP 4 — BUILD LLM REQUEST
-        # --------------------------------------------------
-
-        request = LLMRequest(
-            system_prompt=(
-                "You are an enterprise policy intelligence "
-                "assistant. Answer the user's question using "
-                "only the provided policy context. "
-                "If the context does not contain enough "
-                "information, clearly state that the answer "
-                "cannot be determined from the available "
-                "policy documents. Do not hallucinate."
-            ),
-            user_prompt=question,
-            context=context,
-        )
-
-        # --------------------------------------------------
-        # STEP 5 — GENERATE ANSWER
-        # --------------------------------------------------
-
-        return await self.llm_provider.agenerate(
-            request
-        )
-
-    # ========================================================
-    # CONTEXT CONSTRUCTION
-    # ========================================================
-
-    @staticmethod
-    def _build_context(
-        documents: list[Document],
-    ) -> str:
-        """
-        Convert LangChain Documents into a structured,
-        LLM-ready evidence context.
-        """
-
-        if not documents:
-            return (
-                "No relevant policy documents were found."
+        retrieval_filters = (
+            filters.model_dump(
+                exclude_none=True
             )
-
-        context_parts: list[str] = []
-
-        for index, document in enumerate(
-            documents,
-            start=1,
-        ):
-            metadata = document.metadata
-
-            context_parts.append(
-                (
-                    f"[SOURCE {index}]\n"
-                    f"Document ID: "
-                    f"{metadata.get('document_id', '')}\n"
-                    f"Version ID: "
-                    f"{metadata.get('document_version_id', '')}\n"
-                    f"Chunk ID: "
-                    f"{metadata.get('chunk_id', '')}\n"
-                    f"Retrieval Score: "
-                    f"{metadata.get('score', '')}\n"
-                    f"Content:\n"
-                    f"{document.page_content}"
-                )
-            )
-
-        return "\n\n".join(
-            context_parts
+            if filters
+            else None
         )
+
+        # ----------------------------------------------------
+        # INITIAL QUERY STATE
+        # ----------------------------------------------------
+
+        initial_state: QueryState = {
+            "query": question.strip(),
+            "tenant_id": tenant_id.strip(),
+            "conversation_id": conversation_id,
+            "filters": retrieval_filters,
+            "retry_count": 0,
+        }
+
+        # ----------------------------------------------------
+        # EXECUTE LANGGRAPH
+        # ----------------------------------------------------
+
+        result = await self.query_graph.ainvoke(
+            initial_state
+        )
+
+        return result

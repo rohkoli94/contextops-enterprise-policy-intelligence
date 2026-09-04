@@ -2,6 +2,9 @@ from app.models.document import Document
 from app.models.document_version import DocumentVersion
 from app.models.category import Category, document_categories
 from app.models.tag import Tag, document_tags
+from app.models.conversation import Conversation
+from app.models.conversation_message import ConversationMessage
+from app.models.conversation_summary import ConversationSummary
 
 
 """
@@ -10,17 +13,10 @@ This ensures the models are imported and registered with SQLAlchemy's Base.metad
 
 Why is this important?
 
-Alembic needs to see:
+Alembic needs to see all models through:
 
 Base.metadata
-    │
-    ├── documents
-    ├── document_versions
-    ├── categories
-    ├── document_categories
-    ├── tags
-    └── document_tags
 
-Without importing the model modules, Base.metadata may not contain all your tables.
-
+Without importing the model modules, Alembic may not detect
+the new conversation tables during autogenerate.
 """

@@ -882,6 +882,75 @@ FastAPI Shutdown
 Close Azure + Qdrant async clients
 ```
 
+## Day 18 — LangGraph + State + Conversation Intelligence
+
+Implemented the LangGraph-based query orchestration workflow.
+
+### Query Workflow
+
+```text
+Request
+  ↓
+Input Validation
+  ↓
+Security / Guardrails
+  ↓
+Conversation Context
+  ↓
+Query Contextualization
+  ↓
+Cache Lookup
+  ├── HIT  → Cached Response → Response
+  └── MISS
+       ↓
+   Hybrid Retrieval
+       ↓
+     Reranker
+       ↓
+ Retrieval Validation
+   ├── Sufficient → ContextOps
+   └── Insufficient → Recovery / Safe Abstention
+       ↓
+      LLM
+       ↓
+ Grounding Validation
+       ↓
+    Response
+```
+Implemented
+- Added typed QueryState for LangGraph workflow state.
+- Added input validation node.
+- Added authorization and tenant-isolation guardrails.
+- Added prompt-injection detection.
+- Added input PII analysis.
+- Added PostgreSQL-backed conversation memory.
+- Added bounded recent conversation context.
+- Added rolling conversation summary support.
+- Added QueryRewriter abstraction.
+- Added Microsoft Foundry query contextualization.
+- Added safe fallback to the original query when rewriting fails.
+- Added CacheProvider abstraction.
+- Added deterministic, tenant-aware, version-aware cache-key generation.
+- Added cache lookup and cache-hit response routing.
+- Added hybrid retrieval LangGraph node.
+- Reused existing dense + BM25 + Qdrant RRF retrieval.
+- Added Reranker abstraction and Day 18 pass-through implementation.
+- Added RetrievalValidator abstraction and baseline implementation.
+- Added retrieval confidence and conditional recovery routing.
+- Added ContextOps context assembly and citation generation.
+- Added configurable context document limit.
+- Added configurable context token budget.
+- Added asynchronous LLM generation node.
+- Added GroundingValidator abstraction and baseline implementation.
+- Added grounding validation node.
+- Added final response node.
+- Added complete LangGraph state-machine composition.
+- Refactored QueryService into a thin LangGraph executor.
+- Added FastAPI application-state composition.
+- Added dependency injection for the shared QueryService.
+- Added graph execution and workflow tests.
+- Added asynchronous PostgreSQL session lifecycle for conversation persistence.
+- Added aiohttp for Azure asynchronous client support.
 
 ### Status
 
@@ -902,3 +971,4 @@ Close Azure + Qdrant async clients
 - Day 15 — Dense Retrieval Foundation + LangChain + LangGraph ✅
 - Day 16 — Hybrid Retrieval Foundation ✅
 - Day 17 — Query Service & Async Query Pipeline ✅
+- Day 18 — LangGraph + State + Conversation Intelligence ✅

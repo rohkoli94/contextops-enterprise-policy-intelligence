@@ -7,7 +7,7 @@ from app.api.v1.query.schemas.query_response import (
     QueryResponse,
 )
 from app.core.logging import get_logger
-from app.dependencies.startup import (
+from app.dependencies.query import (
     get_query_service,
 )
 from app.services.query_service import (
@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 async def query_policy(
     request: QueryRequest,
     query_service: QueryService = Depends(
-        get_query_service
+        get_query_service,
     ),
 ) -> QueryResponse:
     """
@@ -41,38 +41,37 @@ async def query_policy(
 
         HTTP Request
             ↓
-        Query Router
-            ↓
         FastAPI Dependency
             ↓
-        Shared QueryService
+        app.state.query_service
             ↓
-        LangChain Retriever
+        QueryService
             ↓
-        Hybrid Retrieval
-            ↓
-        Qdrant
-            ↓
-        RRF
-            ↓
-        Context
-            ↓
-        Microsoft Foundry
+        LangGraph
             ↓
         QueryResponse
     """
 
     logger.info(
-        "User query request received"
+        "User query request received",
     )
 
-    response = await query_service.ask(
+    result = await query_service.ask(
         question=request.query,
         tenant_id=request.tenant_id,
+        conversation_id=request.conversation_id,
         filters=request.filters,
     )
 
     return QueryResponse(
-        answer=response.content,
+        answer=result["answer"],
         status="success",
+        citations=result.get(
+            "citations",
+            [],
+        ),
+        metadata=result.get(
+            "final_response_metadata",
+            {},
+        ),
     )

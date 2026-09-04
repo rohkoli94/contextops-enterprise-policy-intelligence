@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 
 from app.dependencies.container import (
     create_query_service,
@@ -12,110 +12,141 @@ from app.dependencies.rag import (
 )
 
 
+# ============================================================
+# RAG INITIALIZATION
+# ============================================================
+
 def initialize_rag() -> None:
     """
-    Initialize RAG infrastructure when the application starts.
+    Initialize shared RAG infrastructure during application
+    startup.
 
-    Steps:
+    Initialization order:
 
-        1. Create dense embedding provider
-        2. Get embedding vector dimension
-        3. Initialize sparse BM25 provider
-        4. Initialize hybrid retriever
-        5. Create vector store
-        6. Initialize Qdrant collection
+        1. Dense embedding provider
+        2. Embedding vector dimension
+        3. Sparse BM25 provider
+        4. Hybrid retriever
+        5. Vector store
+        6. Qdrant collection
     """
 
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 1 — DENSE EMBEDDING PROVIDER
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
     embedding_provider = (
         get_embedding_provider()
     )
 
-    # --------------------------------------------------
-    # STEP 2 — GET VECTOR DIMENSION
-    # --------------------------------------------------
+    # --------------------------------------------------------
+    # STEP 2 — VECTOR DIMENSION
+    # --------------------------------------------------------
 
     vector_size = (
         embedding_provider.get_dimension()
     )
 
-    # --------------------------------------------------
-    # STEP 3 — SPARSE BM25 PROVIDER
-    # --------------------------------------------------
+    # --------------------------------------------------------
+    # STEP 3 — SPARSE EMBEDDING PROVIDER
+    # --------------------------------------------------------
 
-    # Force initialization of the shared BM25 provider
-    # during application startup.
     get_sparse_embedding_provider()
 
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 4 — HYBRID RETRIEVER
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
-    # Force construction of the shared hybrid retriever
-    # during application startup.
     get_hybrid_retriever()
 
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 5 — VECTOR STORE
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
     vector_store = get_vector_store()
 
-    # --------------------------------------------------
-    # STEP 6 — INITIALIZE QDRANT
-    # --------------------------------------------------
+    # --------------------------------------------------------
+    # STEP 6 — QDRANT COLLECTION
+    # --------------------------------------------------------
 
     vector_store.ensure_collection(
         vector_size=vector_size,
     )
 
 
+# ============================================================
+# APPLICATION INITIALIZATION
+# ============================================================
+
 def initialize_application(
     app: FastAPI,
 ) -> None:
     """
-    Initialize shared application infrastructure and services.
+    Initialize all shared application infrastructure once
+    during FastAPI startup.
 
-    All long-lived components are created once during
-    application startup and stored in application state.
+    Long-lived components are created here and stored in
+    application state.
+
+    Request-specific objects are created later per request.
     """
 
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 1 — RAG INFRASTRUCTURE
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
     initialize_rag()
 
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 2 — QUERY SERVICE
-    # --------------------------------------------------
+    # --------------------------------------------------------
+    #
+    # create_query_service() performs the complete composition:
+    #
+    #   LLM Provider
+    #   Hybrid Retriever
+    #   Conversation Memory
+    #   Query Rewriter
+    #   Cache
+    #   Guardrails
+    #   Reranker
+    #   Retrieval Validator
+    #   Grounding Validator
+    #           ↓
+    #      LangGraph
+    #           ↓
+    #      QueryService
+    #
+    # Everything is created once during application startup.
 
-    # QueryService is composed once during application startup.
-    #
-    # It reuses the shared:
-    #
-    # - Microsoft Foundry LLM provider
-    # - HybridRetriever
-    #
-    # The same QueryService instance is reused by
-    # subsequent HTTP requests.
-
-    app.state.query_service = (
+    query_service = (
         create_query_service()
     )
 
+    # --------------------------------------------------------
+    # STORE SHARED QUERY SERVICE
+    # --------------------------------------------------------
 
-def get_query_service(
-    request: Request,
-):
-    """
-    Return the application-scoped QueryService.
+    app.state.query_service = (
+        query_service
+    )
 
-    The QueryService is created once during startup and
-    retrieved from FastAPI application state for each request.
-    """
+    # --------------------------------------------------------
+    # STORE SHARED QUERY GRAPH
+    # --------------------------------------------------------
+    #
+    # The QueryService now owns the compiled LangGraph.
+    #
+    # Keeping the graph separately available in application
+    # state is useful for:
+    #
+    #   - observability
+    #   - debugging
+    #   - future graph inspection
+    #   - dependency injection
+    #
+    # The QueryService remains the normal application entry point.
 
-    return request.app.state.query_service
+    app.state.query_graph = (
+        query_service.query_graph
+    )

@@ -83,7 +83,22 @@ class Settings(BaseSettings):
     #FastEmbed - For production Docker, we'll later override it with something such as:/app/.cache/fastembed
     fastembed_cache_dir: str = ".cache/fastembed" 
 
+    # ========================================================
+    # Retrieval / Query
+    # ========================================================
+
     retrieval_top_k: int = 10
+
+    conversation_recent_message_limit: int = 6
+
+    rerank_candidate_limit: int = 20
+
+    # Maximum number of reranked documents that ContextOps
+    # may place into the final context.
+    context_max_documents: int = 5
+
+    # Hard token budget for the final LLM context.
+    context_max_tokens: int = 6000
 
     model_config = SettingsConfigDict(
         env_file=".env",

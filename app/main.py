@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,9 +8,23 @@ from fastapi import FastAPI
 from app.api.v1.router import router as v1_router
 from app.api.v2.router import router as v2_router
 from app.config.settings import settings
-from app.dependencies.startup import (
-    initialize_application,
-)
+from app.db.session import async_engine
+from app.dependencies.startup import initialize_application
+
+
+# ============================================================
+# WINDOWS + ASYNC PSYCOPG COMPATIBILITY
+# ============================================================
+#
+# psycopg 3 async connections cannot use Windows'
+# default ProactorEventLoop.
+#
+# Production Linux deployments are unaffected.
+#
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()
+    )
 
 
 # ============================================================
@@ -49,61 +65,68 @@ async def lifespan(
     # STARTUP
     # --------------------------------------------------------
 
-    initialize_application(
-        app
-    )
+    initialize_application(app)
 
-    yield
+    try:
+        yield
 
-    # --------------------------------------------------------
-    # SHUTDOWN
-    # --------------------------------------------------------
+    finally:
 
-    # --------------------------------------------------------
-    # CLOSE QUERY SERVICE ASYNC RESOURCES
-    # --------------------------------------------------------
+        # ----------------------------------------------------
+        # SHUTDOWN
+        # ----------------------------------------------------
 
-    query_service = getattr(
-        app.state,
-        "query_service",
-        None,
-    )
+        # ----------------------------------------------------
+        # CLOSE QUERY SERVICE ASYNC RESOURCES
+        # ----------------------------------------------------
 
-    if query_service is not None:
-
-        llm_provider = (
-            query_service.llm_provider
-        )
-
-        close_method = getattr(
-            llm_provider,
-            "aclose",
+        query_service = getattr(
+            app.state,
+            "query_service",
             None,
         )
 
-        if close_method is not None:
-            await close_method()
+        if query_service is not None:
 
-        # ----------------------------------------------------
-        # CLOSE VECTOR STORE ASYNC CLIENT
-        # ----------------------------------------------------
+            # ------------------------------------------------
+            # CLOSE LLM PROVIDER
+            # ------------------------------------------------
 
-        hybrid_retriever = (
-            query_service.hybrid_retriever
-        )
+            llm_provider = (
+                query_service.llm_provider
+            )
 
-        # LangChain adapter wraps HybridRetriever,
-        # so retrieve the underlying ContextOps retriever.
-        contextops_retriever = getattr(
-            hybrid_retriever,
-            "hybrid_retriever",
-            None,
-        )
+            close_method = getattr(
+                llm_provider,
+                "aclose",
+                None,
+            )
 
-        if contextops_retriever is not None:
+            if close_method is not None:
+                await close_method()
+
+            # ------------------------------------------------
+            # CLOSE VECTOR STORE ASYNC CLIENT
+            # ------------------------------------------------
+            #
+            # QueryService contains the shared HybridRetriever.
+            # HybridRetriever directly contains the VectorStore.
+            #
+            # Therefore:
+            #
+            # QueryService
+            #     ↓
+            # HybridRetriever
+            #     ↓
+            # VectorStore
+            #
+
+            hybrid_retriever = (
+                query_service.hybrid_retriever
+            )
 
             vector_store = getattr(
-                contextops_retriever,
+                hybrid_retriever,
                 "vector_store",
                 None,
             )
@@ -116,6 +139,17 @@ async def lifespan(
 
             if close_method is not None:
                 await close_method()
+
+        # ----------------------------------------------------
+        # CLOSE ASYNC DATABASE ENGINE
+        # ----------------------------------------------------
+        #
+        # Used by the asynchronous query/conversation path.
+        #
+        # This releases the SQLAlchemy async connection pool.
+        #
+
+        await async_engine.dispose()
 
 
 # ============================================================
