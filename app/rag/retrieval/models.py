@@ -11,13 +11,20 @@ class RetrievedChunk:
 
     The embedding vector is intentionally not returned because
     retrieval only needs the matched chunk, its metadata, and
-    its relevance score.
+    its relevance scores.
     """
 
     chunk: DocumentChunk
 
-    # Similarity score returned by the vector database.
+    # Original retrieval score returned by the vector database.
+    # For hybrid retrieval this may represent the fused/RRF ranking score.
     score: float
 
     # Original Qdrant payload / retrieval metadata.
     metadata: dict[str, Any]
+
+    # Score assigned by a reranker.
+    #
+    # This is intentionally separate from `score` because the
+    # retrieval score and reranker score have different meanings.
+    reranker_score: float | None = None

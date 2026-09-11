@@ -24,8 +24,8 @@ from app.rag.retrieval.baseline_grounding_validator import (
 from app.rag.retrieval.baseline_retrieval_validator import (
     BaselineRetrievalValidator,
 )
-from app.rag.retrieval.pass_through_reranker import (
-    PassThroughReranker,
+from app.rag.retrieval.fastembed_reranker import (
+    FastEmbedReranker,
 )
 from app.services.conversation_memory import (
     PostgresConversationMemory,
@@ -147,13 +147,9 @@ def create_query_service() -> QueryService:
     # ========================================================
     # SHARED BASELINE RAG COMPONENTS
     # ========================================================
-    #
-    # These interfaces are intentionally injectable so Day 19/20
-    # implementations can replace them without changing the
-    # LangGraph topology.
-    #
+    
 
-    reranker = PassThroughReranker()
+    reranker = FastEmbedReranker()
 
     retrieval_validator = (
         BaselineRetrievalValidator()

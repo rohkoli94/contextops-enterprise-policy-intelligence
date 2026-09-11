@@ -12,8 +12,15 @@ def create_retrieval_validation_node(
     """
     Create the LangGraph retrieval-validation node.
 
-    The node evaluates reranked documents and stores the
-    evaluation result in QueryState.
+    The node evaluates reranked documents and stores the complete
+    retrieval evaluation in QueryState.
+
+    Stored values include:
+        - sufficient / insufficient
+        - confidence classification
+        - top retrieval/reranker score
+        - reason
+        - evaluation signals
     """
 
     async def node(state: QueryState) -> QueryState:
@@ -38,6 +45,7 @@ def create_retrieval_validation_node(
             "retrieval_confidence": evaluation.confidence,
             "retrieval_score": evaluation.score,
             "retrieval_reason": evaluation.reason,
+            "retrieval_signals": evaluation.signals,
         }
 
     return node

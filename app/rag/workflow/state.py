@@ -1,6 +1,6 @@
 from typing import Any, TypedDict
 
-from langchain_core.documents import Document
+from app.rag.retrieval.models import RetrievedChunk
 
 
 class QueryState(TypedDict, total=False):
@@ -12,6 +12,8 @@ class QueryState(TypedDict, total=False):
     - Full conversation history remains in persistent storage.
     - Query execution is asynchronous.
     - Request-specific state lives here; providers remain shared.
+    - The original user query is never overwritten.
+    - Recovery state is explicitly tracked and bounded.
     """
 
     # ==========================================
@@ -42,9 +44,22 @@ class QueryState(TypedDict, total=False):
     # ==========================================
     # Query intelligence
     # ==========================================
+    #
+    # query:
+    #     Original user question.
+    #
+    # contextualized_query:
+    #     Conversation-aware retrieval query.
+    #
+    # recovery_query:
+    #     Recovery-only reformulated query.
+    #
+    # The original query must never be replaced by either.
+    # ==========================================
     contextualized_query: str
     query_rewritten: bool
     query_rewrite_fallback: bool
+    recovery_query: str | None
 
     # ==========================================
     # Cache
@@ -57,12 +72,12 @@ class QueryState(TypedDict, total=False):
     # ==========================================
     # Retrieval
     # ==========================================
-    retrieved_documents: list[Document]
+    retrieved_documents: list[RetrievedChunk]
 
     # ==========================================
     # Reranking
     # ==========================================
-    reranked_documents: list[Document]
+    reranked_documents: list[RetrievedChunk]
 
     # ==========================================
     # Retrieval validation
@@ -71,12 +86,29 @@ class QueryState(TypedDict, total=False):
     retrieval_score: float | None
     retrieval_sufficient: bool
     retrieval_reason: str | None
+    retrieval_signals: dict[str, Any]
 
     # ==========================================
     # Recovery
     # ==========================================
+    #
+    # retry_count:
+    #     Number of recovery attempts already performed.
+    #
+    # recovery_strategy:
+    #     Strategy used for recovery or safe abstention.
+    #
+    # recovery_success:
+    #     True only when recovery produced sufficient
+    #     evidence that can continue to ContextOps.
+    #
+    # recovery_error:
+    #     Optional operational error captured during recovery.
+    # ==========================================
     retry_count: int
     recovery_strategy: str | None
+    recovery_success: bool
+    recovery_error: str | None
 
     # ==========================================
     # ContextOps

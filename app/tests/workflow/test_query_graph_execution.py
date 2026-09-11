@@ -1,8 +1,8 @@
 from typing import Any
 
 import pytest
-from langchain_core.documents import Document
 
+from app.domain.document_chunk import DocumentChunk
 from app.guardrails.authorization import AuthorizationGuard
 from app.guardrails.pii import RegexPIIAnalyzer
 from app.guardrails.prompt_injection import PromptInjectionGuard
@@ -10,6 +10,7 @@ from app.guardrails.tenant_isolation import TenantIsolationGuard
 from app.rag.retrieval.grounding_validator import (
     GroundingEvaluation,
 )
+from app.rag.retrieval.models import RetrievedChunk
 from app.rag.retrieval.retrieval_validator import (
     RetrievalEvaluation,
 )
@@ -48,30 +49,27 @@ class FakeHybridRetriever:
         tenant_id: str,
         top_k: int,
         filters: dict[str, Any] | None = None,
-    ):
+    ) -> list[RetrievedChunk]:
         return [
-            type(
-                "Retrieved",
-                (),
-                {
-                    "chunk": type(
-                        "Chunk",
-                        (),
-                        {
-                            "content": (
-                                "The notice period is "
-                                "three months."
-                            ),
-                            "chunk_id": "chunk-001",
-                            "document_id": "doc-001",
-                            "document_version_id": (
-                                "version-001"
-                            ),
-                        },
-                    )(),
-                    "score": 0.92,
+            RetrievedChunk(
+                chunk=DocumentChunk(
+                    chunk_id="chunk-001",
+                    document_id="doc-001",
+                    document_version_id="version-001",
+                    element_ids=["element-001"],
+                    content=(
+                        "The notice period is three months."
+                    ),
+                    chunk_index=0,
+                    content_hash="hash-001",
+                    metadata={},
+                ),
+                score=0.92,
+                metadata={
+                    "tenant_id": tenant_id,
+                    "chunk_id": "chunk-001",
                 },
-            )()
+            )
         ]
 
 
@@ -140,9 +138,17 @@ class FakeQueryRewriter:
         conversation_summary: str | None,
         recent_messages: list[dict[str, object]],
     ) -> str:
+        # Normal contextualization.
+        if query == "What about managers?":
+            return (
+                "What is the notice period policy "
+                "for managers?"
+            )
+
+        # Recovery reformulation.
         return (
-            "What is the notice period policy "
-            "for managers?"
+            "manager notice period policy "
+            "employee resignation notice"
         )
 
 
@@ -184,9 +190,9 @@ class FakeReranker:
         self,
         *,
         query: str,
-        documents: list[Document],
-    ) -> list[Document]:
-        return documents
+        candidates: list[RetrievedChunk],
+    ) -> list[RetrievedChunk]:
+        return candidates
 
 
 # ============================================================
@@ -199,15 +205,16 @@ class FakeRetrievalValidator:
         self,
         *,
         query: str,
-        documents: list[Document],
+        documents: list[RetrievedChunk],
     ) -> RetrievalEvaluation:
         return RetrievalEvaluation(
             sufficient=True,
-            confidence="high",
+            confidence="strong",
             score=0.95,
             reason="Strong evidence found.",
             signals={
                 "test": True,
+                "document_count": len(documents),
             },
         )
 
@@ -223,7 +230,7 @@ class FakeGroundingValidator:
         *,
         query: str,
         answer: str,
-        documents: list[Document],
+        documents: list[RetrievedChunk],
     ) -> GroundingEvaluation:
         return GroundingEvaluation(
             grounded=True,
@@ -274,7 +281,7 @@ async def test_query_graph_executes_end_to_end() -> None:
         ),
 
         # ----------------------------------------------------
-        # REAL DAY 18 GUARDRAILS
+        # Guardrails
         # ----------------------------------------------------
 
         authorization_guard=(
@@ -397,16 +404,22 @@ async def test_query_graph_executes_end_to_end() -> None:
     # RETRIEVAL
     # ========================================================
 
+    assert result["retrieved_documents"]
+
     assert (
-        result["retrieved_documents"]
+        len(result["retrieved_documents"])
+        == 1
     )
 
     # ========================================================
     # RERANKING
     # ========================================================
 
+    assert result["reranked_documents"]
+
     assert (
-        result["reranked_documents"]
+        len(result["reranked_documents"])
+        == 1
     )
 
     # ========================================================
@@ -420,12 +433,38 @@ async def test_query_graph_executes_end_to_end() -> None:
 
     assert (
         result["retrieval_confidence"]
-        == "high"
+        == "strong"
     )
 
     assert (
         result["retrieval_score"]
         == 0.95
+    )
+
+    assert (
+        result["retrieval_reason"]
+        == "Strong evidence found."
+    )
+
+    assert (
+        result["retrieval_signals"]["test"]
+        is True
+    )
+
+    # ========================================================
+    # RECOVERY
+    # ========================================================
+
+    # Recovery must not execute because the initial retrieval
+    # was sufficient.
+    assert (
+        result.get("recovery_success")
+        is not True
+    )
+
+    assert (
+        result.get("retry_count", 0)
+        == 0
     )
 
     # ========================================================
@@ -437,8 +476,11 @@ async def test_query_graph_executes_end_to_end() -> None:
         in result["context"]
     )
 
+    assert result["citations"]
+
     assert (
-        result["citations"]
+        result["citations"][0]["document_id"]
+        == "doc-001"
     )
 
     # ========================================================
@@ -480,4 +522,18 @@ async def test_query_graph_executes_end_to_end() -> None:
             "cache_hit"
         ]
         is False
+    )
+
+    assert (
+        result["final_response_metadata"][
+            "retrieval_confidence"
+        ]
+        == "strong"
+    )
+
+    assert (
+        result["final_response_metadata"][
+            "retrieval_sufficient"
+        ]
+        is True
     )

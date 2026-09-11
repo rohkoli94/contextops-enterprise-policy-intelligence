@@ -1,6 +1,7 @@
 from collections.abc import Awaitable, Callable
 
 from app.config.settings import settings
+from app.rag.retrieval.models import RetrievedChunk
 from app.rag.workflow.state import QueryState
 
 
@@ -10,10 +11,12 @@ def create_contextops_node(
     """
     Create the ContextOps context-assembly node.
 
-    Day 18 responsibilities:
-        - select a bounded number of reranked documents
-        - build structured LLM context
+    Day 19 responsibilities:
+        - consume reranked RetrievedChunk objects
+        - select a bounded number of highest-ranked candidates
+        - preserve retrieval/reranker scores
         - preserve citation metadata
+        - build structured LLM context
 
     Day 20 responsibilities:
         - deduplication
@@ -37,7 +40,7 @@ def create_contextops_node(
     async def node(
         state: QueryState,
     ) -> QueryState:
-        documents = state.get(
+        documents: list[RetrievedChunk] = state.get(
             "reranked_documents",
             [],
         )
@@ -57,36 +60,41 @@ def create_contextops_node(
             selected_documents,
             start=1,
         ):
+            chunk = document.chunk
             metadata = document.metadata
+
+            # --------------------------------------------------
+            # Identity / provenance
+            # --------------------------------------------------
 
             document_id = str(
                 metadata.get(
                     "document_id",
-                    "",
+                    chunk.document_id,
                 )
             )
 
             document_version_id = str(
                 metadata.get(
                     "document_version_id",
-                    "",
+                    chunk.document_version_id,
                 )
             )
 
             chunk_id = str(
                 metadata.get(
                     "chunk_id",
-                    "",
+                    chunk.chunk_id,
                 )
             )
 
-            retrieval_score = metadata.get(
-                "score"
-            )
+            # --------------------------------------------------
+            # Retrieval / reranking signals
+            # --------------------------------------------------
 
-            reranker_score = metadata.get(
-                "reranker_score"
-            )
+            retrieval_score = document.score
+
+            reranker_score = document.reranker_score
 
             # --------------------------------------------------
             # LLM context representation
@@ -104,7 +112,7 @@ def create_contextops_node(
                     f"Reranker Score: "
                     f"{reranker_score}\n"
                     f"Content:\n"
-                    f"{document.page_content}"
+                    f"{chunk.content}"
                 )
             )
 

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from langchain_core.documents import Document
+from app.rag.retrieval.models import RetrievedChunk
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,6 @@ class GroundingValidator(ABC):
         *,
         query: str,
         answer: str,
-        documents: list[Document],
+        documents: list[RetrievedChunk],
     ) -> GroundingEvaluation:
         raise NotImplementedError

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from langchain_core.documents import Document
+from app.rag.retrieval.models import RetrievedChunk
 
 
 @dataclass(frozen=True)
@@ -11,10 +11,8 @@ class RetrievalEvaluation:
 
     This is intentionally not a probability.
 
-    `confidence` is a qualitative classification based on the
-    available retrieval signals.
-
-    Day 19 can introduce a richer calibrated scoring strategy.
+    `confidence` is a qualitative classification based on
+    retrieval and reranking signals.
     """
 
     sufficient: bool
@@ -36,6 +34,6 @@ class RetrievalValidator(ABC):
         self,
         *,
         query: str,
-        documents: list[Document],
+        documents: list[RetrievedChunk],
     ) -> RetrievalEvaluation:
         raise NotImplementedError

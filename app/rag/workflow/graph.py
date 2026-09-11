@@ -24,6 +24,7 @@ from app.rag.retrieval.retrieval_validator import (
 )
 from app.rag.workflow.edges import (
     route_after_cache_lookup,
+    route_after_retrieval_recovery,
     route_after_retrieval_validation,
 )
 from app.rag.workflow.nodes.cache_lookup import (
@@ -54,7 +55,7 @@ from app.rag.workflow.nodes.retrieval import (
     create_hybrid_retrieval_node,
 )
 from app.rag.workflow.nodes.retrieval_recovery import (
-    retrieval_recovery_node,
+    create_retrieval_recovery_node,
 )
 from app.rag.workflow.nodes.retrieval_validation import (
     create_retrieval_validation_node,
@@ -93,10 +94,18 @@ def create_query_graph(
     """
     Build and compile the ContextOps query workflow.
 
-    Day 18 provides the complete orchestration structure.
+    Day 18:
+        Complete end-to-end orchestration.
 
-    Day 19/20 can replace baseline implementations without
-    changing the graph topology.
+    Day 19:
+        Real reranking, candidate-pool limiting, retrieval
+        confidence evaluation, bounded recovery, query
+        reformulation, re-retrieval, re-ranking, and
+        safe abstention.
+
+    Day 20:
+        Production hardening, observability, caching, and
+        evaluation improvements.
     """
 
     # --------------------------------------------------------
@@ -172,6 +181,16 @@ def create_query_graph(
     retrieval_validation_node = (
         create_retrieval_validation_node(
             retrieval_validator
+        )
+    )
+
+    retrieval_recovery_node = (
+        create_retrieval_recovery_node(
+            hybrid_retriever=hybrid_retriever,
+            reranker=reranker,
+            retrieval_validator=retrieval_validator,
+            query_rewriter=query_rewriter,
+            max_retries=1,
         )
     )
 
@@ -327,7 +346,7 @@ def create_query_graph(
     )
 
     # --------------------------------------------------------
-    # RETRIEVAL
+    # INITIAL RETRIEVAL
     # --------------------------------------------------------
 
     builder.add_edge(
@@ -341,7 +360,7 @@ def create_query_graph(
     )
 
     # --------------------------------------------------------
-    # RETRIEVAL VALIDATION
+    # INITIAL RETRIEVAL VALIDATION
     # --------------------------------------------------------
 
     builder.add_conditional_edges(
@@ -356,12 +375,35 @@ def create_query_graph(
     )
 
     # --------------------------------------------------------
-    # DAY 18 RECOVERY
+    # RETRIEVAL RECOVERY
+    # --------------------------------------------------------
+    #
+    # Recovery performs:
+    #
+    #   query reformulation
+    #          ↓
+    #   broader retrieval
+    #          ↓
+    #       top-20 pool
+    #          ↓
+    #        rerank
+    #          ↓
+    #      validation
+    #
+    # Successful recovery continues to ContextOps.
+    #
+    # Failed recovery goes directly to Response with
+    # safe abstention, preventing unsupported evidence
+    # from reaching the LLM.
     # --------------------------------------------------------
 
-    builder.add_edge(
+    builder.add_conditional_edges(
         "retrieval_recovery",
-        "response",
+        route_after_retrieval_recovery,
+        {
+            "contextops": "contextops",
+            "response": "response",
+        },
     )
 
     # --------------------------------------------------------

@@ -66,6 +66,11 @@ COPY README.md ./
 
 RUN uv run python -c "from fastembed import SparseTextEmbedding; SparseTextEmbedding(model_name='Qdrant/bm25', cache_dir='/app/.cache/fastembed'); print('Qdrant BM25 model preloaded successfully')"
 
+# ============================================================
+# PRELOAD RERANKER MODEL
+# ============================================================
+
+RUN uv run python -c "from fastembed.rerank.cross_encoder import TextCrossEncoder; TextCrossEncoder(model_name='Xenova/ms-marco-MiniLM-L-6-v2', cache_dir='/app/.cache/fastembed', providers=['CPUExecutionProvider']); print('MS MARCO reranker model preloaded successfully')"
 
 # ============================================================
 # FASTAPI

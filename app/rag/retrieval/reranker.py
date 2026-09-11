@@ -1,17 +1,20 @@
 from abc import ABC, abstractmethod
 
-from langchain_core.documents import Document
+from app.rag.retrieval.models import RetrievedChunk
 
 
 class Reranker(ABC):
     """
-    Abstraction for reranking retrieved candidate documents.
+    Abstraction for reranking retrieved candidate chunks.
 
     Retrieval is responsible for recall.
 
     Reranking is responsible for improving precision by
     reordering the retrieved candidate set according to
     query-document relevance.
+
+    The original retrieval score is preserved separately from
+    the reranker score.
     """
 
     @abstractmethod
@@ -19,12 +22,17 @@ class Reranker(ABC):
         self,
         *,
         query: str,
-        documents: list[Document],
-    ) -> list[Document]:
+        candidates: list[RetrievedChunk],
+    ) -> list[RetrievedChunk]:
         """
-        Rerank candidate documents for the supplied query.
+        Rerank the supplied retrieval candidates.
 
-        Implementations must preserve the Document objects and
-        may enrich metadata with reranking information.
+        Implementations must:
+
+        - preserve the original RetrievedChunk objects/content
+        - preserve the original retrieval score
+        - preserve tenant/filter metadata
+        - attach the reranker score separately
+        - return candidates ordered by reranker relevance
         """
         raise NotImplementedError

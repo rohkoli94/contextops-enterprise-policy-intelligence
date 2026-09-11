@@ -952,6 +952,67 @@ Implemented
 - Added asynchronous PostgreSQL session lifecycle for conversation persistence.
 - Added aiohttp for Azure asynchronous client support.
 
+## Day 19 — Advanced Retrieval + Confidence + Recovery
+
+Implemented advanced retrieval controls, reranking, retrieval confidence evaluation, bounded recovery, query reformulation, re-retrieval, and safe abstention.
+
+### Retrieval Architecture
+
+```text
+User Query
+    ↓
+Query Contextualization
+    ↓
+Hybrid Retrieval
+    ├── Dense Retrieval
+    └── BM25 Sparse Retrieval
+            ↓
+        Qdrant Hybrid Search
+            ↓
+           RRF
+            ↓
+   RetrievedChunk[]
+            ↓
+   Candidate Pool
+   (Top-N / Top-20)
+            ↓
+     FastEmbed Reranker
+     MS MARCO Cross-Encoder
+            ↓
+   RerankedChunk[]
+            ↓
+ Retrieval Confidence
+      Evaluation
+```
+
+## Day 19 — Advanced Retrieval + Confidence + Recovery
+
+Implemented advanced retrieval controls, reranking, confidence evaluation, bounded recovery, query reformulation, and safe abstention.
+
+### Changes
+
+- Added production `Reranker` abstraction with FastEmbed MS MARCO cross-encoder.
+- Added CPU reranking and Docker model preloading.
+- Added configurable top-N candidate pool and reranker score propagation.
+- Added `RetrievalEvaluation` with confidence classification and retrieval signals.
+- Added bounded recovery with query reformulation, broader retrieval, reranking and re-validation.
+- Preserved original query, tenant ID and metadata filters during recovery.
+- Added LangGraph recovery routing and safe abstention.
+- Added reranking, validation and recovery tests.
+
+### Reranking Flow
+
+```text
+Hybrid Retrieval
+      ↓
+Top-N Candidate Pool
+      ↓
+MS MARCO Reranker
+      ↓
+RerankedChunk[]
+```
+
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -972,3 +1033,4 @@ Implemented
 - Day 16 — Hybrid Retrieval Foundation ✅
 - Day 17 — Query Service & Async Query Pipeline ✅
 - Day 18 — LangGraph + State + Conversation Intelligence ✅
+- Day 19 — Advanced Retrieval + Confidence + Recovery

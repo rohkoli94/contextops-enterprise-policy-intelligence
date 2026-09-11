@@ -1,16 +1,15 @@
 import re
 
-from langchain_core.documents import Document
-
 from app.rag.retrieval.grounding_validator import (
     GroundingEvaluation,
     GroundingValidator,
 )
+from app.rag.retrieval.models import RetrievedChunk
 
 
 class BaselineGroundingValidator(GroundingValidator):
     """
-    Conservative Day 18 grounding validator.
+    Conservative grounding validator.
 
     Current behavior:
         - validates that an answer exists
@@ -18,7 +17,7 @@ class BaselineGroundingValidator(GroundingValidator):
         - extracts [SOURCE N] references
         - verifies that referenced sources exist
 
-    This is an orchestration baseline.
+    This remains an orchestration baseline.
 
     A stronger enterprise grounding implementation will later
     perform claim-level evidence verification.
@@ -33,7 +32,7 @@ class BaselineGroundingValidator(GroundingValidator):
         *,
         query: str,
         answer: str,
-        documents: list[Document],
+        documents: list[RetrievedChunk],
     ) -> GroundingEvaluation:
 
         # --------------------------------------------------

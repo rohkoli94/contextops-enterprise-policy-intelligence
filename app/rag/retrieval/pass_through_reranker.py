@@ -1,45 +1,40 @@
-from langchain_core.documents import Document
-
+from app.rag.retrieval.models import RetrievedChunk
 from app.rag.retrieval.reranker import Reranker
 
 
 class PassThroughReranker(Reranker):
     """
-    Day 18 baseline reranker.
+    Baseline reranker implementation.
 
-    The component preserves retrieval ordering and records
-    that no reranking model has been applied yet.
-
-    Day 19 will replace this with a real reranker implementation.
+    Preserves the original retrieval ordering and retrieval scores
+    while explicitly marking that no real reranking model was applied.
     """
 
     async def rerank(
         self,
         *,
         query: str,
-        documents: list[Document],
-    ) -> list[Document]:
-
+        candidates: list[RetrievedChunk],
+    ) -> list[RetrievedChunk]:
         if not query or not query.strip():
             raise ValueError("Query cannot be empty.")
 
-        reranked_documents: list[Document] = []
+        reranked_candidates: list[RetrievedChunk] = []
 
-        for rank, document in enumerate(
-            documents,
-            start=1,
-        ):
-            metadata = dict(document.metadata)
+        for rank, candidate in enumerate(candidates, start=1):
+            metadata = dict(candidate.metadata)
 
             metadata["reranker_applied"] = False
             metadata["reranker_rank"] = rank
             metadata["reranker_score"] = None
 
-            reranked_documents.append(
-                Document(
-                    page_content=document.page_content,
+            reranked_candidates.append(
+                RetrievedChunk(
+                    chunk=candidate.chunk,
+                    score=candidate.score,
                     metadata=metadata,
+                    reranker_score=None,
                 )
             )
 
-        return reranked_documents
+        return reranked_candidates
