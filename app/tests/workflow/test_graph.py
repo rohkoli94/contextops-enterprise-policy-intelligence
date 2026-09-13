@@ -27,9 +27,14 @@ class FakeCacheProvider:
     pass
 
 
+class FakeEmbeddingProvider:
+    pass
+
+
 def test_query_graph_compiles() -> None:
     graph = create_query_graph(
         llm_provider=FakeLLMProvider(),
+        embedding_provider=FakeEmbeddingProvider(),
         hybrid_retriever=FakeHybridRetriever(),
         conversation_memory=FakeConversationMemory(),
         query_rewriter=FakeQueryRewriter(),

@@ -1,0 +1,52 @@
+[
+  {
+    "question": "What is the company's remote work policy?",
+    "tenant_id": "contextops",
+    "expected_answer": "REPLACE_WITH_EXPECTED_POLICY_ANSWER",
+    "expected_source_ids": [
+      "REPLACE_WITH_DOCUMENT_OR_CHUNK_ID"
+    ],
+    "conversation_id": null,
+    "filters": null
+  },
+  {
+    "question": "How many days of remote work are employees allowed per week?",
+    "tenant_id": "contextops",
+    "expected_answer": "REPLACE_WITH_EXPECTED_POLICY_ANSWER",
+    "expected_source_ids": [
+      "REPLACE_WITH_DOCUMENT_OR_CHUNK_ID"
+    ],
+    "conversation_id": null,
+    "filters": null
+  },
+  {
+    "question": "Who approves remote work requests?",
+    "tenant_id": "contextops",
+    "expected_answer": "REPLACE_WITH_EXPECTED_POLICY_ANSWER",
+    "expected_source_ids": [
+      "REPLACE_WITH_DOCUMENT_OR_CHUNK_ID"
+    ],
+    "conversation_id": null,
+    "filters": null
+  },
+  {
+    "question": "What is the employee leave policy?",
+    "tenant_id": "contextops",
+    "expected_answer": "REPLACE_WITH_EXPECTED_POLICY_ANSWER",
+    "expected_source_ids": [
+      "REPLACE_WITH_DOCUMENT_OR_CHUNK_ID"
+    ],
+    "conversation_id": null,
+    "filters": null
+  },
+  {
+    "question": "What should an employee do if they are unsure about a company policy?",
+    "tenant_id": "contextops",
+    "expected_answer": "REPLACE_WITH_EXPECTED_POLICY_ANSWER",
+    "expected_source_ids": [
+      "REPLACE_WITH_DOCUMENT_OR_CHUNK_ID"
+    ],
+    "conversation_id": null,
+    "filters": null
+  }
+]

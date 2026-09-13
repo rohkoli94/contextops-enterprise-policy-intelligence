@@ -1,7 +1,10 @@
 from app.db.session import AsyncSessionLocal
 
+from app.config.settings import settings
 from app.dependencies.rag import (
+    get_embedding_provider,
     get_hybrid_retriever,
+    get_vector_store,
 )
 from app.guardrails import (
     AuthorizationGuard,
@@ -12,12 +15,6 @@ from app.guardrails import (
 from app.providers.llm.microsoft_foundry import (
     MicrosoftFoundryProvider,
 )
-from app.rag.workflow.graph import (
-    create_query_graph,
-)
-from app.repositories.conversation import (
-    ConversationRepository,
-)
 from app.rag.retrieval.baseline_grounding_validator import (
     BaselineGroundingValidator,
 )
@@ -27,88 +24,53 @@ from app.rag.retrieval.baseline_retrieval_validator import (
 from app.rag.retrieval.fastembed_reranker import (
     FastEmbedReranker,
 )
+from app.rag.workflow.graph import (
+    create_query_graph,
+)
+from app.repositories.conversation import (
+    ConversationRepository,
+)
 from app.services.conversation_memory import (
     PostgresConversationMemory,
 )
 from app.services.microsoft_foundry_query_rewriter import (
     MicrosoftFoundryQueryRewriter,
 )
-from app.services.no_op_cache import (
-    NoOpCacheProvider,
-)
 from app.services.query_service import (
     QueryService,
+)
+from app.services.redis_cache import (
+    RedisCacheProvider,
 )
 
 
 def create_query_service() -> QueryService:
-    """
-    Compose the shared query application graph.
-
-    This function is called once during FastAPI startup.
-
-    Long-lived/shared components:
-
-        MicrosoftFoundryProvider
-                +
-        HybridRetriever
-                +
-        ConversationMemory
-                +
-        QueryRewriter
-                +
-        CacheProvider
-                +
-        Guardrails
-                +
-        Reranker
-                +
-        Validators
-                ↓
-           LangGraph
-                ↓
-          QueryService
-
-    Request-specific state is created inside QueryService.ask().
-    """
-
     # ========================================================
-    # SHARED LLM PROVIDER
+    # PROVIDERS
     # ========================================================
 
     llm_provider = MicrosoftFoundryProvider()
 
-    # ========================================================
-    # SHARED HYBRID RETRIEVER
-    # ========================================================
+    embedding_provider = get_embedding_provider()
 
     hybrid_retriever = get_hybrid_retriever()
 
+    vector_store = get_vector_store()
+
     # ========================================================
-    # SHARED CONVERSATION REPOSITORY
+    # CONVERSATION MEMORY
     # ========================================================
-    #
-    # IMPORTANT:
-    # AsyncSessionLocal is a session factory.
-    #
-    # We do NOT create one AsyncSession here and keep it
-    # inside the application-scoped service.
-    #
 
     conversation_repository = ConversationRepository(
         session_factory=AsyncSessionLocal,
     )
-
-    # ========================================================
-    # SHARED CONVERSATION MEMORY
-    # ========================================================
 
     conversation_memory = PostgresConversationMemory(
         repository=conversation_repository,
     )
 
     # ========================================================
-    # SHARED QUERY REWRITER
+    # QUERY REWRITER
     # ========================================================
 
     query_rewriter = MicrosoftFoundryQueryRewriter(
@@ -116,55 +78,47 @@ def create_query_service() -> QueryService:
     )
 
     # ========================================================
-    # SHARED CACHE
+    # CACHE
     # ========================================================
-    #
-    # Day 18:
-    #     NoOpCacheProvider
-    #
-    # Later:
-    #     RedisCacheProvider
-    #
 
-    cache_provider = NoOpCacheProvider()
+    cache_provider = RedisCacheProvider(
+        redis_url=settings.redis_url,
+        key_prefix=settings.redis_cache_key_prefix,
+    )
 
     # ========================================================
-    # SHARED GUARDRAILS
+    # GUARDRAILS
     # ========================================================
 
     authorization_guard = AuthorizationGuard()
 
-    tenant_isolation_guard = (
-        TenantIsolationGuard()
-    )
+    tenant_isolation_guard = TenantIsolationGuard()
 
-    prompt_injection_guard = (
-        PromptInjectionGuard()
-    )
+    prompt_injection_guard = PromptInjectionGuard()
 
     pii_analyzer = RegexPIIAnalyzer()
 
     # ========================================================
-    # SHARED BASELINE RAG COMPONENTS
+    # RERANKER
     # ========================================================
-    
 
     reranker = FastEmbedReranker()
 
-    retrieval_validator = (
-        BaselineRetrievalValidator()
-    )
+    # ========================================================
+    # RETRIEVAL VALIDATION
+    # ========================================================
 
-    grounding_validator = (
-        BaselineGroundingValidator()
-    )
+    retrieval_validator = BaselineRetrievalValidator()
+
+    grounding_validator = BaselineGroundingValidator()
 
     # ========================================================
-    # BUILD LANGGRAPH
+    # LANGGRAPH
     # ========================================================
 
     query_graph = create_query_graph(
         llm_provider=llm_provider,
+        embedding_provider=embedding_provider,
         hybrid_retriever=hybrid_retriever,
         conversation_memory=conversation_memory,
         query_rewriter=query_rewriter,
@@ -182,6 +136,13 @@ def create_query_service() -> QueryService:
     # QUERY SERVICE
     # ========================================================
 
-    return QueryService(
+    query_service = QueryService(
         query_graph=query_graph,
+        shutdown_resources=[
+            llm_provider,
+            cache_provider,
+            vector_store,
+        ],
     )
+
+    return query_service

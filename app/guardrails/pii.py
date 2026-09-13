@@ -13,9 +13,10 @@ class RegexPIIAnalyzer(PIIAnalyzer):
     Baseline PII analyzer for common, obvious PII patterns.
 
     Current detection:
-    - email
-    - Indian phone number
-    - Aadhaar-like 12 digit number
+
+        - email
+        - Indian phone number
+        - Aadhaar-like 12 digit number
 
     The abstraction is intentionally provider-independent so
     it can later be replaced by a stronger enterprise DLP/PII
@@ -38,15 +39,21 @@ class RegexPIIAnalyzer(PIIAnalyzer):
         self,
         text: str,
     ) -> PIIAnalysisResult:
+        """
+        Analyze text for configured PII patterns.
+        """
 
         if not text:
             return PIIAnalysisResult(
                 detected=False,
+                action=GuardrailAction.ALLOW,
             )
 
         entities: list[PIIEntity] = []
 
-        for entity_type, pattern in self._PATTERNS.items():
+        for entity_type, pattern in (
+            self._PATTERNS.items()
+        ):
             for match in pattern.finditer(text):
                 entities.append(
                     PIIEntity(
@@ -70,13 +77,10 @@ class RegexPIIAnalyzer(PIIAnalyzer):
             metadata={
                 "entity_count": len(entities),
                 "entity_types": sorted(
-                    {entity.entity_type for entity in entities}
+                    {
+                        entity.entity_type
+                        for entity in entities
+                    }
                 ),
             },
         )
-
-# note
-# For input PII, we're currently returning: detected → AUDIT
-# rather than automatically blocking. That's deliberate. 
-# In an enterprise policy system, some legitimate queries may contain an identifier that is necessary for the task. 
-# The actual action should be controlled by policy rather than blindly blocking every PII occurrence.

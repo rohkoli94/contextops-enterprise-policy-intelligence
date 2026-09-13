@@ -985,10 +985,6 @@ Hybrid Retrieval
       Evaluation
 ```
 
-## Day 19 — Advanced Retrieval + Confidence + Recovery
-
-Implemented advanced retrieval controls, reranking, confidence evaluation, bounded recovery, query reformulation, and safe abstention.
-
 ### Changes
 
 - Added production `Reranker` abstraction with FastEmbed MS MARCO cross-encoder.
@@ -1012,6 +1008,47 @@ MS MARCO Reranker
 RerankedChunk[]
 ```
 
+### Retrieval Confidence
+
+```text
+Retrieved Documents
+        ↓
+Confidence Evaluation
+        ↓
+STRONG / SUFFICIENT / NONE
+```
+
+Reranker scores are treated as ranking signals, not probabilities.
+
+### Retrieval Recovery
+```text
+Retrieval Validation
+        ↓
+   Insufficient
+        ↓
+Query Reformulation
+        ↓
+Broader Retrieval
+        ↓
+      Rerank
+        ↓
+   Re-validation
+      /     \
+ Success   Failure
+    ↓         ↓
+ContextOps   Safe
+    ↓       Abstention
+   LLM
+```
+
+### Safe Abstention
+
+When sufficient evidence cannot be found, weak evidence is not sent to the LLM.
+
+"I could not find sufficient policy evidence
+to answer this question reliably."
+
+
 
 ### Status
 
@@ -1034,3 +1071,4 @@ RerankedChunk[]
 - Day 17 — Query Service & Async Query Pipeline ✅
 - Day 18 — LangGraph + State + Conversation Intelligence ✅
 - Day 19 — Advanced Retrieval + Confidence + Recovery
+- Day 20  ✓ ContextOps / caching / observability / evaluation

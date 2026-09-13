@@ -14,6 +14,9 @@ class QueryState(TypedDict, total=False):
     - Request-specific state lives here; providers remain shared.
     - The original user query is never overwritten.
     - Recovery state is explicitly tracked and bounded.
+    - ContextOps processing is explicitly observable.
+    - Cache behavior is explicitly observable.
+    - Workflow timings are captured for operational visibility.
     """
 
     # ==========================================
@@ -68,6 +71,9 @@ class QueryState(TypedDict, total=False):
     cache_hit: bool
     cached_response: dict[str, Any] | None
     cache_error: str | None
+    cache_write_attempted: bool
+    cache_written: bool
+    cache_write_error: str | None
 
     # ==========================================
     # Retrieval
@@ -115,6 +121,11 @@ class QueryState(TypedDict, total=False):
     # ==========================================
     context: str
     citations: list[dict[str, Any]]
+    context_token_count: int
+    context_pii_detected: bool
+    context_pii_entity_count: int
+    context_compressed: bool
+    context_compressed_document_count: int
 
     # ==========================================
     # LLM
@@ -128,4 +139,29 @@ class QueryState(TypedDict, total=False):
     grounding_status: str | None
     grounding_reason: str | None
     grounding_supported_sources: list[int]
+
+    # ==========================================
+    # Observability
+    # ==========================================
+    #
+    # JSON-serializable timing information.
+    #
+    # Example:
+    #
+    # timings = {
+    #     "stages": {
+    #         "retrieval": 42.381,
+    #         "rerank": 18.742,
+    #         "contextops": 31.205,
+    #         "llm_generation": 842.116,
+    #     },
+    #     "total_ms": 1012.772,
+    # }
+    # ==========================================
+    langsmith_run_id: str | None
+    timings: dict[str, Any]
+
+    # ==========================================
+    # Final response metadata
+    # ==========================================
     final_response_metadata: dict[str, Any]

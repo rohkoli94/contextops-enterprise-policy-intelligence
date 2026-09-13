@@ -1,5 +1,12 @@
-from app.rag.workflow.graph import create_query_graph
+"""
+ContextOps LangGraph workflow package.
 
-__all__ = [
-    "create_query_graph",
-]
+Workflow components should be imported explicitly from their
+respective modules.
+
+Example:
+
+    from app.rag.workflow.graph import create_query_graph
+"""
+
+__all__: list[str] = []

@@ -100,6 +100,28 @@ class Settings(BaseSettings):
     # Hard token budget for the final LLM context.
     context_max_tokens: int = 6000
 
+
+    # =========================================================
+    # REDIS CACHE
+    # =========================================================
+    redis_url: str = "redis://localhost:6379/0"
+    redis_cache_ttl_seconds: int = 300
+    redis_cache_key_prefix: str = "contextops:cache:"
+
+    # =========================================================
+    # LANGSMITH
+    # =========================================================
+
+    langsmith_tracing: bool = False
+    langsmith_api_key: str | None = None
+    langsmith_project: str = "contextops"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_workspace_id: str | None = None
+
+
+    # =========================================================
+    # PYDANTIC SETTINGS
+    # =========================================================
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

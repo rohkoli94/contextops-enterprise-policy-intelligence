@@ -1,3 +1,5 @@
+import asyncio
+
 from app.providers.embedding.base import (
     EmbeddingRequest,
     EmbeddingProvider,
@@ -15,7 +17,7 @@ class HybridRetriever(RetrievalProvider):
     Hybrid retriever combining dense semantic retrieval
     with sparse BM25 lexical retrieval.
 
-    The query path is asynchronous.
+    The production query path is asynchronous.
 
     Flow:
 
@@ -55,6 +57,49 @@ class HybridRetriever(RetrievalProvider):
         self.vector_store = vector_store
 
     # ========================================================
+    # SYNCHRONOUS HYBRID RETRIEVAL
+    # ========================================================
+
+    def retrieve(
+        self,
+        query: str,
+        tenant_id: str,
+        top_k: int,
+        filters: dict[str, object] | None = None,
+    ) -> list[RetrievedChunk]:
+        """
+        Synchronously retrieve relevant document chunks.
+
+        The actual implementation lives in aretrieve() so that
+        both interfaces use exactly the same retrieval logic.
+
+        This method satisfies the synchronous RetrievalProvider
+        contract.
+
+        The synchronous method must not be called while another
+        asyncio event loop is already running. Async callers
+        should use aretrieve() directly.
+        """
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(
+                self.aretrieve(
+                    query=query,
+                    tenant_id=tenant_id,
+                    top_k=top_k,
+                    filters=filters,
+                )
+            )
+
+        raise RuntimeError(
+            "HybridRetriever.retrieve() cannot be called "
+            "from a running event loop. Use aretrieve() "
+            "instead."
+        )
+
+    # ========================================================
     # ASYNC HYBRID RETRIEVAL
     # ========================================================
 
@@ -73,9 +118,9 @@ class HybridRetriever(RetrievalProvider):
         The final fusion is delegated to the VectorStore.
         """
 
-        # --------------------------------------------------
+        # ----------------------------------------------------
         # STEP 1 — GENERATE DENSE QUERY
-        # --------------------------------------------------
+        # ----------------------------------------------------
 
         embedding_response = (
             await self.embedding_provider.agenerate(
@@ -89,9 +134,9 @@ class HybridRetriever(RetrievalProvider):
             embedding_response.vector
         )
 
-        # --------------------------------------------------
+        # ----------------------------------------------------
         # STEP 2 — GENERATE BM25 SPARSE QUERY
-        # --------------------------------------------------
+        # ----------------------------------------------------
 
         sparse_query = (
             await self.sparse_embedding_provider.agenerate(
@@ -99,9 +144,9 @@ class HybridRetriever(RetrievalProvider):
             )
         )
 
-        # --------------------------------------------------
+        # ----------------------------------------------------
         # STEP 3 — HYBRID SEARCH
-        # --------------------------------------------------
+        # ----------------------------------------------------
 
         return await self.vector_store.asearch_hybrid(
             query_vector=query_vector,

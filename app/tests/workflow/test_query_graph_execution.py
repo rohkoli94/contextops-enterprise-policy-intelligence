@@ -7,6 +7,13 @@ from app.guardrails.authorization import AuthorizationGuard
 from app.guardrails.pii import RegexPIIAnalyzer
 from app.guardrails.prompt_injection import PromptInjectionGuard
 from app.guardrails.tenant_isolation import TenantIsolationGuard
+from app.providers.embedding.base import (
+    EmbeddingBatchRequest,
+    EmbeddingBatchResponse,
+    EmbeddingRequest,
+    EmbeddingResponse,
+    EmbeddingProvider,
+)
 from app.rag.retrieval.grounding_validator import (
     GroundingEvaluation,
 )
@@ -34,6 +41,79 @@ class FakeLLMProvider:
             )
 
         return Response()
+
+
+# ============================================================
+# TEST EMBEDDING PROVIDER
+# ============================================================
+
+
+class FakeEmbeddingProvider(EmbeddingProvider):
+    """
+    Deterministic embedding provider used only by the graph
+    integration test.
+
+    No external embedding service is called.
+    """
+
+    def __init__(self) -> None:
+        self.query_vector = [
+            1.0,
+            0.0,
+            0.0,
+        ]
+
+    # --------------------------------------------------------
+    # Synchronous single embedding
+    # --------------------------------------------------------
+
+    def generate(
+        self,
+        request: EmbeddingRequest,
+    ) -> EmbeddingResponse:
+        return EmbeddingResponse(
+            vector=list(self.query_vector),
+            model="fake-model",
+            provider="fake",
+        )
+
+    # --------------------------------------------------------
+    # Asynchronous single embedding
+    # --------------------------------------------------------
+
+    async def agenerate(
+        self,
+        request: EmbeddingRequest,
+    ) -> EmbeddingResponse:
+        return EmbeddingResponse(
+            vector=list(self.query_vector),
+            model="fake-model",
+            provider="fake",
+        )
+
+    # --------------------------------------------------------
+    # Synchronous batch embedding
+    # --------------------------------------------------------
+
+    def generate_batch(
+        self,
+        request: EmbeddingBatchRequest,
+    ) -> EmbeddingBatchResponse:
+        return EmbeddingBatchResponse(
+            vectors=[
+                list(self.query_vector)
+                for _ in request.texts
+            ],
+            model="fake-model",
+            provider="fake",
+        )
+
+    # --------------------------------------------------------
+    # Vector dimension
+    # --------------------------------------------------------
+
+    def get_dimension(self) -> int:
+        return len(self.query_vector)
 
 
 # ============================================================
@@ -214,7 +294,9 @@ class FakeRetrievalValidator:
             reason="Strong evidence found.",
             signals={
                 "test": True,
-                "document_count": len(documents),
+                "document_count": len(
+                    documents
+                ),
             },
         )
 
@@ -253,6 +335,14 @@ async def test_query_graph_executes_end_to_end() -> None:
         # ----------------------------------------------------
 
         llm_provider=FakeLLMProvider(),
+
+        # ----------------------------------------------------
+        # Embeddings
+        # ----------------------------------------------------
+
+        embedding_provider=(
+            FakeEmbeddingProvider()
+        ),
 
         # ----------------------------------------------------
         # Retrieval
@@ -451,6 +541,13 @@ async def test_query_graph_executes_end_to_end() -> None:
         is True
     )
 
+    assert (
+        result["retrieval_signals"][
+            "document_count"
+        ]
+        == 1
+    )
+
     # ========================================================
     # RECOVERY
     # ========================================================
@@ -479,7 +576,9 @@ async def test_query_graph_executes_end_to_end() -> None:
     assert result["citations"]
 
     assert (
-        result["citations"][0]["document_id"]
+        result["citations"][0][
+            "document_id"
+        ]
         == "doc-001"
     )
 

@@ -41,6 +41,10 @@ logging.basicConfig(
     ),
 )
 
+logger = logging.getLogger(
+    "contextops.lifecycle"
+)
+
 
 # ============================================================
 # APPLICATION LIFESPAN
@@ -58,7 +62,8 @@ async def lifespan(
         and services once.
 
     Shutdown:
-        Release asynchronous clients/resources.
+        Release explicitly registered asynchronous
+        application resources and the database engine.
     """
 
     # --------------------------------------------------------
@@ -71,85 +76,82 @@ async def lifespan(
         yield
 
     finally:
-
         # ----------------------------------------------------
         # SHUTDOWN
         # ----------------------------------------------------
 
         # ----------------------------------------------------
-        # CLOSE QUERY SERVICE ASYNC RESOURCES
+        # CLOSE REGISTERED APPLICATION RESOURCES
         # ----------------------------------------------------
+        #
+        # Shared providers/clients will be registered on
+        # app.state by the application composition layer.
+        #
+        # Each resource is expected to expose:
+        #
+        #     aclose()
+        #
+        # or:
+        #
+        #     close()
+        #
+        # This keeps lifecycle management out of QueryService.
+        #
 
-        query_service = getattr(
+        resources = getattr(
             app.state,
-            "query_service",
-            None,
+            "shutdown_resources",
+            [],
         )
 
-        if query_service is not None:
+        for resource in resources:
+            if resource is None:
+                continue
 
-            # ------------------------------------------------
-            # CLOSE LLM PROVIDER
-            # ------------------------------------------------
+            try:
+                close_method = getattr(
+                    resource,
+                    "aclose",
+                    None,
+                )
 
-            llm_provider = (
-                query_service.llm_provider
-            )
+                if close_method is not None:
+                    await close_method()
+                    continue
 
-            close_method = getattr(
-                llm_provider,
-                "aclose",
-                None,
-            )
+                close_method = getattr(
+                    resource,
+                    "close",
+                    None,
+                )
 
-            if close_method is not None:
-                await close_method()
+                if close_method is not None:
+                    result = close_method()
 
-            # ------------------------------------------------
-            # CLOSE VECTOR STORE ASYNC CLIENT
-            # ------------------------------------------------
-            #
-            # QueryService contains the shared HybridRetriever.
-            # HybridRetriever directly contains the VectorStore.
-            #
-            # Therefore:
-            #
-            # QueryService
-            #     ↓
-            # HybridRetriever
-            #     ↓
-            # VectorStore
-            #
+                    if asyncio.iscoroutine(
+                        result
+                    ):
+                        await result
 
-            hybrid_retriever = (
-                query_service.hybrid_retriever
-            )
-
-            vector_store = getattr(
-                hybrid_retriever,
-                "vector_store",
-                None,
-            )
-
-            close_method = getattr(
-                vector_store,
-                "aclose",
-                None,
-            )
-
-            if close_method is not None:
-                await close_method()
+            except Exception:
+                logger.exception(
+                    "Failed to close application resource: %r",
+                    resource,
+                )
 
         # ----------------------------------------------------
         # CLOSE ASYNC DATABASE ENGINE
         # ----------------------------------------------------
         #
-        # Used by the asynchronous query/conversation path.
-        #
         # This releases the SQLAlchemy async connection pool.
         #
 
-        await async_engine.dispose()
+        try:
+            await async_engine.dispose()
+        except Exception:
+            logger.exception(
+                "Failed to dispose async database engine."
+            )
 
 
 # ============================================================

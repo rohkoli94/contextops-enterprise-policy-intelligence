@@ -4,6 +4,7 @@ from app.guardrails import (
     PromptInjectionGuard,
     TenantIsolationGuard,
 )
+from app.providers.embedding.base import EmbeddingProvider
 from app.providers.llm.base import LLMProvider
 from app.rag.retrieval.baseline_grounding_validator import (
     BaselineGroundingValidator,
@@ -29,6 +30,9 @@ from app.rag.workflow.edges import (
 )
 from app.rag.workflow.nodes.cache_lookup import (
     create_cache_lookup_node,
+)
+from app.rag.workflow.nodes.cache_store import (
+    create_cache_store_node,
 )
 from app.rag.workflow.nodes.cached_response import (
     create_cached_response_node,
@@ -73,12 +77,16 @@ from app.rag.workflow.state import QueryState
 from app.services.cache_provider import CacheProvider
 from app.services.conversation_memory import ConversationMemory
 from app.services.query_rewriter import QueryRewriter
+from app.observability.timing import (
+    create_timed_node,
+)
 from langgraph.graph import END, START, StateGraph
 
 
 def create_query_graph(
     *,
     llm_provider: LLMProvider,
+    embedding_provider: EmbeddingProvider,
     hybrid_retriever: HybridRetriever,
     conversation_memory: ConversationMemory,
     query_rewriter: QueryRewriter,
@@ -104,8 +112,9 @@ def create_query_graph(
         safe abstention.
 
     Day 20:
-        Production hardening, observability, caching, and
-        evaluation improvements.
+        ContextOps hardening including token-aware packing,
+        deduplication, diversity/MMR, PII protection,
+        compression, caching, observability, and evaluation.
     """
 
     # --------------------------------------------------------
@@ -156,6 +165,10 @@ def create_query_graph(
         )
     )
 
+    # --------------------------------------------------------
+    # CACHE LOOKUP
+    # --------------------------------------------------------
+
     cache_lookup_node = (
         create_cache_lookup_node(
             cache_provider
@@ -165,6 +178,20 @@ def create_query_graph(
     cached_response_node = (
         create_cached_response_node()
     )
+
+    # --------------------------------------------------------
+    # CACHE STORE
+    # --------------------------------------------------------
+
+    cache_store_node = (
+        create_cache_store_node(
+            cache_provider
+        )
+    )
+
+    # --------------------------------------------------------
+    # RETRIEVAL
+    # --------------------------------------------------------
 
     hybrid_retrieval_node = (
         create_hybrid_retrieval_node(
@@ -194,9 +221,28 @@ def create_query_graph(
         )
     )
 
+    # --------------------------------------------------------
+    # ContextOps
+    # --------------------------------------------------------
+    #
+    # Shared dense embedding provider:
+    #     - used for MMR/diversity selection
+    #
+    # Shared PII analyzer:
+    #     - scans retrieved context
+    #     - redacts detected PII before LLM generation
+    # --------------------------------------------------------
+
     contextops_node = (
-        create_contextops_node()
+        create_contextops_node(
+            embedding_provider=embedding_provider,
+            pii_analyzer=pii_analyzer,
+        )
     )
+
+    # --------------------------------------------------------
+    # LLM
+    # --------------------------------------------------------
 
     llm_generation_node = (
         create_llm_generation_node(
@@ -204,14 +250,137 @@ def create_query_graph(
         )
     )
 
+    # --------------------------------------------------------
+    # GROUNDING
+    # --------------------------------------------------------
+
     grounding_node = (
         create_grounding_validation_node(
             grounding_validator
         )
     )
 
+    # --------------------------------------------------------
+    # RESPONSE
+    # --------------------------------------------------------
+
     response_node = (
         create_response_node()
+    )
+
+    # ========================================================
+    # TIMING INSTRUMENTATION
+    # ========================================================
+    #
+    # Business nodes remain unchanged.
+    #
+    # Each node is wrapped with a lightweight timing decorator
+    # that records execution duration into QueryState.
+    # ========================================================
+
+    timed_input_validation_node = (
+        create_timed_node(
+            name="input_validation",
+            node=input_validation_node,
+        )
+    )
+
+    timed_security_node = (
+        create_timed_node(
+            name="security",
+            node=security_node,
+        )
+    )
+
+    timed_conversation_context_node = (
+        create_timed_node(
+            name="conversation_context",
+            node=conversation_context_node,
+        )
+    )
+
+    timed_query_contextualization_node = (
+        create_timed_node(
+            name="query_contextualization",
+            node=query_contextualization_node,
+        )
+    )
+
+    timed_cache_lookup_node = (
+        create_timed_node(
+            name="cache_lookup",
+            node=cache_lookup_node,
+        )
+    )
+
+    timed_cached_response_node = (
+        create_timed_node(
+            name="cached_response",
+            node=cached_response_node,
+        )
+    )
+
+    timed_hybrid_retrieval_node = (
+        create_timed_node(
+            name="hybrid_retrieval",
+            node=hybrid_retrieval_node,
+        )
+    )
+
+    timed_rerank_node = (
+        create_timed_node(
+            name="rerank",
+            node=rerank_node,
+        )
+    )
+
+    timed_retrieval_validation_node = (
+        create_timed_node(
+            name="retrieval_validation",
+            node=retrieval_validation_node,
+        )
+    )
+
+    timed_retrieval_recovery_node = (
+        create_timed_node(
+            name="retrieval_recovery",
+            node=retrieval_recovery_node,
+        )
+    )
+
+    timed_contextops_node = (
+        create_timed_node(
+            name="contextops",
+            node=contextops_node,
+        )
+    )
+
+    timed_llm_generation_node = (
+        create_timed_node(
+            name="llm_generation",
+            node=llm_generation_node,
+        )
+    )
+
+    timed_grounding_node = (
+        create_timed_node(
+            name="grounding",
+            node=grounding_node,
+        )
+    )
+
+    timed_cache_store_node = (
+        create_timed_node(
+            name="cache_store",
+            node=cache_store_node,
+        )
+    )
+
+    timed_response_node = (
+        create_timed_node(
+            name="response",
+            node=response_node,
+        )
     )
 
     # --------------------------------------------------------
@@ -226,72 +395,77 @@ def create_query_graph(
 
     builder.add_node(
         "input_validation",
-        input_validation_node,
+        timed_input_validation_node,
     )
 
     builder.add_node(
         "security",
-        security_node,
+        timed_security_node,
     )
 
     builder.add_node(
         "conversation_context",
-        conversation_context_node,
+        timed_conversation_context_node,
     )
 
     builder.add_node(
         "query_contextualization",
-        query_contextualization_node,
+        timed_query_contextualization_node,
     )
 
     builder.add_node(
         "cache_lookup",
-        cache_lookup_node,
+        timed_cache_lookup_node,
     )
 
     builder.add_node(
         "cached_response",
-        cached_response_node,
+        timed_cached_response_node,
+    )
+
+    builder.add_node(
+        "cache_store",
+        timed_cache_store_node,
     )
 
     builder.add_node(
         "hybrid_retrieval",
-        hybrid_retrieval_node,
+        timed_hybrid_retrieval_node,
     )
 
     builder.add_node(
         "rerank",
-        rerank_node,
+        timed_rerank_node,
     )
 
     builder.add_node(
         "retrieval_validation",
-        retrieval_validation_node,
+        timed_retrieval_validation_node,
     )
 
     builder.add_node(
         "retrieval_recovery",
-        retrieval_recovery_node,
+        timed_retrieval_recovery_node,
     )
 
     builder.add_node(
         "contextops",
-        contextops_node,
+        timed_contextops_node,
     )
 
     builder.add_node(
         "llm_generation",
-        llm_generation_node,
+        timed_llm_generation_node,
     )
 
     builder.add_node(
         "grounding",
-        grounding_node,
+        timed_grounding_node,
     )
 
     builder.add_node(
         "response",
-        response_node,
+        timed_response_node,
     )
 
     # --------------------------------------------------------
@@ -340,6 +514,10 @@ def create_query_graph(
         },
     )
 
+    # --------------------------------------------------------
+    # CACHE HIT
+    # --------------------------------------------------------
+
     builder.add_edge(
         "cached_response",
         "response",
@@ -377,25 +555,6 @@ def create_query_graph(
     # --------------------------------------------------------
     # RETRIEVAL RECOVERY
     # --------------------------------------------------------
-    #
-    # Recovery performs:
-    #
-    #   query reformulation
-    #          ↓
-    #   broader retrieval
-    #          ↓
-    #       top-20 pool
-    #          ↓
-    #        rerank
-    #          ↓
-    #      validation
-    #
-    # Successful recovery continues to ContextOps.
-    #
-    # Failed recovery goes directly to Response with
-    # safe abstention, preventing unsupported evidence
-    # from reaching the LLM.
-    # --------------------------------------------------------
 
     builder.add_conditional_edges(
         "retrieval_recovery",
@@ -421,11 +580,20 @@ def create_query_graph(
     )
 
     # --------------------------------------------------------
-    # GROUNDING → RESPONSE
+    # GROUNDING → CACHE STORE
     # --------------------------------------------------------
 
     builder.add_edge(
         "grounding",
+        "cache_store",
+    )
+
+    # --------------------------------------------------------
+    # CACHE STORE → RESPONSE
+    # --------------------------------------------------------
+
+    builder.add_edge(
+        "cache_store",
         "response",
     )
 

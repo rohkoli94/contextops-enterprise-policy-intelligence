@@ -3,12 +3,14 @@ from fastapi import FastAPI
 from app.dependencies.container import (
     create_query_service,
 )
-
 from app.dependencies.rag import (
     get_embedding_provider,
+    get_hybrid_retriever,
     get_sparse_embedding_provider,
     get_vector_store,
-    get_hybrid_retriever,
+)
+from app.observability.langsmith import (
+    configure_langsmith,
 )
 
 
@@ -92,22 +94,35 @@ def initialize_application(
     """
 
     # --------------------------------------------------------
-    # STEP 1 — RAG INFRASTRUCTURE
+    # STEP 1 — LANGSMITH TRACING
+    # --------------------------------------------------------
+    #
+    # Configure LangSmith before creating the query graph.
+    #
+    # LangGraph/LangChain can then automatically emit traces
+    # for query executions when tracing is enabled.
+    #
+
+    configure_langsmith()
+
+    # --------------------------------------------------------
+    # STEP 2 — RAG INFRASTRUCTURE
     # --------------------------------------------------------
 
     initialize_rag()
 
     # --------------------------------------------------------
-    # STEP 2 — QUERY SERVICE
+    # STEP 3 — QUERY SERVICE
     # --------------------------------------------------------
     #
-    # create_query_service() performs the complete composition:
+    # create_query_service() performs complete composition:
     #
     #   LLM Provider
+    #   Embedding Provider
     #   Hybrid Retriever
     #   Conversation Memory
     #   Query Rewriter
-    #   Cache
+    #   Redis Cache
     #   Guardrails
     #   Reranker
     #   Retrieval Validator
@@ -118,6 +133,7 @@ def initialize_application(
     #      QueryService
     #
     # Everything is created once during application startup.
+    #
 
     query_service = (
         create_query_service()
@@ -135,18 +151,27 @@ def initialize_application(
     # STORE SHARED QUERY GRAPH
     # --------------------------------------------------------
     #
-    # The QueryService now owns the compiled LangGraph.
+    # The QueryService owns the compiled LangGraph.
     #
-    # Keeping the graph separately available in application
-    # state is useful for:
-    #
-    #   - observability
-    #   - debugging
-    #   - future graph inspection
-    #   - dependency injection
-    #
-    # The QueryService remains the normal application entry point.
 
     app.state.query_graph = (
         query_service.query_graph
+    )
+
+    # --------------------------------------------------------
+    # REGISTER SHUTDOWN RESOURCES
+    # --------------------------------------------------------
+    #
+    # The composition layer exposes shared async resources
+    # through QueryService.shutdown_resources.
+    #
+    # main.py is responsible only for lifecycle execution.
+    #
+
+    app.state.shutdown_resources = list(
+        getattr(
+            query_service,
+            "shutdown_resources",
+            [],
+        )
     )
