@@ -1048,7 +1048,43 @@ When sufficient evidence cannot be found, weak evidence is not sent to the LLM.
 "I could not find sufficient policy evidence
 to answer this question reliably."
 
+## Day 20 — ContextOps, Caching, Observability & Evaluation
 
+Implemented production hardening for the RAG query pipeline.
+
+### Changes
+
+- Added ContextOps for deduplication, MMR-based diversity and token-aware context packing
+- Added deterministic context compression
+- Added PII detection and redaction for retrieved context
+- Preserved source and citation metadata
+- Added Redis-based query caching with version-aware cache keys
+- Added conditional cache writes only for grounded responses
+- Added workflow stage and total query timing
+- Added LangSmith tracing configuration foundation
+- Added evaluation models, golden dataset loader and evaluation runner
+- Added deterministic evaluation metrics
+- Added LLM-as-a-judge foundation
+- Added LangSmith evaluation publishing
+- Added expanded ContextOps, caching, workflow and evaluation tests
+
+### ContextOps Flow
+
+```text
+Retrieved Documents
+        ↓
+Deduplication
+        ↓
+MMR / Diversity
+        ↓
+PII Protection
+        ↓
+Token Budget
+        ↓
+Context Compression
+        ↓
+LLM Context
+```
 
 ### Status
 
