@@ -1086,6 +1086,29 @@ Context Compression
 LLM Context
 ```
 
+## Day 21 — Async Ingestion & Background Processing
+
+Implemented asynchronous document ingestion with native async storage, batch embeddings, and Qdrant upsert.
+
+### Added
+
+- Async DocumentService and FastAPI upload path
+- Native async Azure Blob operations
+- Async batch dense and BM25 embeddings
+- Async Qdrant upsert
+- FastAPI BackgroundTasks for non-blocking ingestion
+- Async ingestion tests
+
+### Flow
+
+```text
+Upload → PostgreSQL + Blob → 202 Accepted
+                         ↓
+                  Background Ingestion
+                         ↓
+              Extract → Chunk → Embed → Qdrant
+```
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -1108,3 +1131,4 @@ LLM Context
 - Day 18 — LangGraph + State + Conversation Intelligence ✅
 - Day 19 — Advanced Retrieval + Confidence + Recovery
 - Day 20  ✓ ContextOps / caching / observability / evaluation
+- Day 21 — Async Ingestion + Background Processing

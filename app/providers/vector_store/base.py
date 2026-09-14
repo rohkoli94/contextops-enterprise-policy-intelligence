@@ -1,14 +1,13 @@
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Any
 
 from app.domain.embedded_document_chunk import (
     EmbeddedDocumentChunk,
 )
-
 from app.domain.sparse_embedding import (
     SparseEmbedding,
 )
-
 from app.rag.retrieval.models import (
     RetrievedChunk,
 )
@@ -21,11 +20,13 @@ class VectorStore(ABC):
     The application depends on this interface rather than
     directly depending on Qdrant.
 
-    The vector store supports:
+    Supports:
 
         - dense semantic retrieval
-        - sparse BM25 lexical retrieval
+        - sparse BM25 retrieval
         - hybrid retrieval
+        - synchronous writes
+        - asynchronous writes
     """
 
     # ========================================================
@@ -43,7 +44,7 @@ class VectorStore(ABC):
         raise NotImplementedError
 
     # ========================================================
-    # UPSERT
+    # SYNCHRONOUS UPSERT
     # ========================================================
 
     @abstractmethod
@@ -63,6 +64,34 @@ class VectorStore(ABC):
         raise NotImplementedError
 
     # ========================================================
+    # ASYNCHRONOUS UPSERT
+    # ========================================================
+
+    async def aupsert(
+        self,
+        chunks: list[EmbeddedDocumentChunk],
+    ) -> None:
+        """
+        Insert or update embedded document chunks asynchronously.
+
+        Default implementation delegates the synchronous method
+        to a worker thread.
+
+        Concrete vector stores with native async SDK support
+        should override this method.
+        """
+
+        if chunks is None:
+            raise ValueError(
+                "Chunks cannot be None."
+            )
+
+        await asyncio.to_thread(
+            self.upsert,
+            chunks,
+        )
+
+    # ========================================================
     # DENSE SEARCH
     # ========================================================
 
@@ -76,24 +105,6 @@ class VectorStore(ABC):
     ) -> list[RetrievedChunk]:
         """
         Asynchronously perform dense semantic retrieval.
-
-        query_vector:
-            Dense embedding of the user query.
-
-        tenant_id:
-            Tenant whose data may be searched.
-
-        top_k:
-            Maximum number of results.
-
-        filters:
-            Optional metadata filters such as:
-
-                - document_id
-                - document_version_id
-                - categories
-                - tags
-                - content_type
         """
         raise NotImplementedError
 
@@ -110,20 +121,7 @@ class VectorStore(ABC):
         filters: dict[str, Any] | None = None,
     ) -> list[RetrievedChunk]:
         """
-        Asynchronously perform sparse lexical / BM25
-        retrieval.
-
-        sparse_query:
-            BM25 sparse representation of the user query.
-
-        tenant_id:
-            Tenant whose data may be searched.
-
-        top_k:
-            Maximum number of results.
-
-        filters:
-            Optional metadata filters.
+        Asynchronously perform sparse lexical / BM25 retrieval.
         """
         raise NotImplementedError
 
@@ -141,32 +139,16 @@ class VectorStore(ABC):
         filters: dict[str, Any] | None = None,
     ) -> list[RetrievedChunk]:
         """
-        Asynchronously perform hybrid dense + sparse
-        retrieval.
+        Asynchronously perform hybrid dense + sparse retrieval.
 
-        query_vector:
-            Dense embedding of the user query.
+        Flow:
 
-        sparse_query:
-            BM25 sparse representation of the user query.
-
-        tenant_id:
-            Tenant whose data may be searched.
-
-        top_k:
-            Maximum number of final results.
-
-        filters:
-            Optional metadata filters.
-
-        The implementation is responsible for:
-
-            dense candidate retrieval
+            Dense retrieval
                     +
-            sparse/BM25 candidate retrieval
+            Sparse/BM25 retrieval
                     ↓
-                   fusion
+                 Fusion
                     ↓
-              final ranked results
+             Final ranked results
         """
         raise NotImplementedError

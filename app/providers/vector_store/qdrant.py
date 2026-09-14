@@ -32,9 +32,7 @@ class QdrantVectorStore(VectorStore):
             ->
         payload filtering
             ->
-        vector retrieval
-
-    Payload contains retrieval and source metadata.
+        vector retrieval / indexing
 
     The collection supports two named vector types:
 
@@ -44,24 +42,16 @@ class QdrantVectorStore(VectorStore):
         bm25
             Sparse lexical vector used for BM25 retrieval.
 
-    Retrieval is asynchronous.
+    Retrieval and ingestion support asynchronous execution.
 
-    Administrative and write operations currently use the
-    synchronous Qdrant client.
+    Synchronous clients remain available for existing
+    administrative and compatibility operations.
     """
 
     def __init__(self) -> None:
-        # ----------------------------------------------------
+        # ========================================================
         # SYNCHRONOUS CLIENT
-        # ----------------------------------------------------
-        #
-        # Used for:
-        #
-        # - collection creation
-        # - payload indexes
-        # - shard management
-        # - upsert
-        #
+        # ========================================================
 
         if settings.qdrant_api_key:
             self.client = QdrantClient(
@@ -83,9 +73,9 @@ class QdrantVectorStore(VectorStore):
                 url=settings.qdrant_url,
             )
 
-    # ========================================================
+    # ============================================================
     # COLLECTION
-    # ========================================================
+    # ============================================================
 
     def ensure_collection(
         self,
@@ -117,9 +107,9 @@ class QdrantVectorStore(VectorStore):
         self.client.create_collection(
             collection_name=collection_name,
 
-            # ------------------------------------------------
+            # ----------------------------------------------------
             # DENSE VECTOR
-            # ------------------------------------------------
+            # ----------------------------------------------------
 
             vectors_config={
                 "dense": models.VectorParams(
@@ -128,9 +118,9 @@ class QdrantVectorStore(VectorStore):
                 ),
             },
 
-            # ------------------------------------------------
+            # ----------------------------------------------------
             # SPARSE BM25 VECTOR
-            # ------------------------------------------------
+            # ----------------------------------------------------
 
             sparse_vectors_config={
                 "bm25": models.SparseVectorParams(
@@ -138,13 +128,14 @@ class QdrantVectorStore(VectorStore):
                 ),
             },
 
-            # ------------------------------------------------
+            # ----------------------------------------------------
             # CUSTOM TENANT SHARDING
-            # ------------------------------------------------
+            # ----------------------------------------------------
 
             shard_number=(
                 settings.qdrant_shard_number
             ),
+
             sharding_method=(
                 models.ShardingMethod.CUSTOM
             ),
@@ -156,81 +147,119 @@ class QdrantVectorStore(VectorStore):
             settings.qdrant_default_shard_key
         )
 
-    # ========================================================
+    # ============================================================
     # PAYLOAD INDEXES
-    # ========================================================
+    # ============================================================
 
-    def ensure_payload_indexes(self) -> None:
+    def ensure_payload_indexes(
+        self,
+    ) -> None:
         """
         Create payload indexes for metadata used during
         retrieval filtering.
 
         Indexed fields:
 
-        - tenant_id
-        - document_id
-        - document_version_id
-        - categories
-        - tags
-        - content_type
+            tenant_id
+            document_id
+            document_version_id
+            categories
+            tags
+            content_type
         """
 
         collection_name = (
             settings.qdrant_collection_name
         )
 
+        # --------------------------------------------------------
+        # TENANT
+        # --------------------------------------------------------
+
         self.client.create_payload_index(
             collection_name=collection_name,
             field_name="tenant_id",
-            field_schema=models.KeywordIndexParams(
-                type=models.KeywordIndexType.KEYWORD,
-                is_tenant=True,
+            field_schema=(
+                models.KeywordIndexParams(
+                    type=models.KeywordIndexType.KEYWORD,
+                    is_tenant=True,
+                )
             ),
         )
+
+        # --------------------------------------------------------
+        # DOCUMENT
+        # --------------------------------------------------------
 
         self.client.create_payload_index(
             collection_name=collection_name,
             field_name="document_id",
-            field_schema=models.KeywordIndexParams(
-                type=models.KeywordIndexType.KEYWORD,
+            field_schema=(
+                models.KeywordIndexParams(
+                    type=models.KeywordIndexType.KEYWORD,
+                )
             ),
         )
+
+        # --------------------------------------------------------
+        # DOCUMENT VERSION
+        # --------------------------------------------------------
 
         self.client.create_payload_index(
             collection_name=collection_name,
             field_name="document_version_id",
-            field_schema=models.KeywordIndexParams(
-                type=models.KeywordIndexType.KEYWORD,
+            field_schema=(
+                models.KeywordIndexParams(
+                    type=models.KeywordIndexType.KEYWORD,
+                )
             ),
         )
+
+        # --------------------------------------------------------
+        # CATEGORIES
+        # --------------------------------------------------------
 
         self.client.create_payload_index(
             collection_name=collection_name,
             field_name="categories",
-            field_schema=models.KeywordIndexParams(
-                type=models.KeywordIndexType.KEYWORD,
+            field_schema=(
+                models.KeywordIndexParams(
+                    type=models.KeywordIndexType.KEYWORD,
+                )
             ),
         )
+
+        # --------------------------------------------------------
+        # TAGS
+        # --------------------------------------------------------
 
         self.client.create_payload_index(
             collection_name=collection_name,
             field_name="tags",
-            field_schema=models.KeywordIndexParams(
-                type=models.KeywordIndexType.KEYWORD,
+            field_schema=(
+                models.KeywordIndexParams(
+                    type=models.KeywordIndexType.KEYWORD,
+                )
             ),
         )
+
+        # --------------------------------------------------------
+        # CONTENT TYPE
+        # --------------------------------------------------------
 
         self.client.create_payload_index(
             collection_name=collection_name,
             field_name="content_type",
-            field_schema=models.KeywordIndexParams(
-                type=models.KeywordIndexType.KEYWORD,
+            field_schema=(
+                models.KeywordIndexParams(
+                    type=models.KeywordIndexType.KEYWORD,
+                )
             ),
         )
 
-    # ========================================================
+    # ============================================================
     # SHARD MANAGEMENT
-    # ========================================================
+    # ============================================================
 
     def ensure_shard_key(
         self,
@@ -246,14 +275,18 @@ class QdrantVectorStore(VectorStore):
             large-insurer
         """
 
-        existing_keys = self.client.list_shard_keys(
-            collection_name=(
-                settings.qdrant_collection_name
-            ),
+        existing_keys = (
+            self.client.list_shard_keys(
+                collection_name=(
+                    settings.qdrant_collection_name
+                ),
+            )
         )
 
         existing_key_values = {
-            self._normalize_shard_key(key)
+            self._normalize_shard_key(
+                key
+            )
             for key in existing_keys
         }
 
@@ -277,31 +310,29 @@ class QdrantVectorStore(VectorStore):
         """
         Create a dedicated shard key for a tenant.
 
-        Example:
-
-            tenant_id = "large-bank"
-
-            shard key = "large-bank"
-
         The actual decision to promote a tenant should be made
-        by application/operations policy, based on workload,
-        data size, query volume, isolation requirements, etc.
+        by application/operations policy based on:
+
+            - workload
+            - data size
+            - query volume
+            - isolation requirements
         """
 
         self.ensure_shard_key(
             tenant_id
         )
 
-    # ========================================================
-    # UPSERT
-    # ========================================================
+    # ============================================================
+    # SYNCHRONOUS UPSERT
+    # ============================================================
 
     def upsert(
         self,
         chunks: list[EmbeddedDocumentChunk],
     ) -> None:
         """
-        Upsert embedded chunks into Qdrant.
+        Upsert embedded chunks into Qdrant synchronously.
 
         One request must contain chunks from exactly one tenant,
         because shard routing is tenant-specific.
@@ -309,6 +340,10 @@ class QdrantVectorStore(VectorStore):
 
         if not chunks:
             return
+
+        # --------------------------------------------------------
+        # TENANT VALIDATION
+        # --------------------------------------------------------
 
         tenant_ids = {
             chunk.chunk.metadata.get(
@@ -326,6 +361,10 @@ class QdrantVectorStore(VectorStore):
 
         tenant_id = tenant_ids.pop()
 
+        # --------------------------------------------------------
+        # POINT CONVERSION
+        # --------------------------------------------------------
+
         points = [
             self._to_point(
                 embedded_chunk
@@ -333,16 +372,9 @@ class QdrantVectorStore(VectorStore):
             for embedded_chunk in chunks
         ]
 
-        # Tiered routing:
-        #
-        # target:
-        #     tenant's dedicated shard, if it exists
-        #
-        # fallback:
-        #     shared default shard
-        #
-        # Qdrant routes to target when active; otherwise
-        # it uses fallback.
+        # --------------------------------------------------------
+        # TENANT SHARD ROUTING
+        # --------------------------------------------------------
 
         shard_selector = (
             models.ShardKeyWithFallback(
@@ -362,9 +394,92 @@ class QdrantVectorStore(VectorStore):
             wait=True,
         )
 
-    # ========================================================
+    # ============================================================
+    # ASYNCHRONOUS UPSERT
+    # ============================================================
+
+    async def aupsert(
+        self,
+        chunks: list[EmbeddedDocumentChunk],
+    ) -> None:
+        """
+        Upsert embedded chunks into Qdrant asynchronously.
+
+        Uses the native AsyncQdrantClient rather than delegating
+        the synchronous operation to a worker thread.
+
+        One request must contain chunks from exactly one tenant,
+        because shard routing is tenant-specific.
+        """
+
+        if chunks is None:
+            raise ValueError(
+                "Chunks cannot be None."
+            )
+
+        if not chunks:
+            return
+
+        # --------------------------------------------------------
+        # TENANT VALIDATION
+        # --------------------------------------------------------
+
+        tenant_ids = {
+            chunk.chunk.metadata.get(
+                "tenant_id",
+                settings.default_tenant_id,
+            )
+            for chunk in chunks
+        }
+
+        if len(tenant_ids) != 1:
+            raise ValueError(
+                "All chunks in one Qdrant upsert request "
+                "must belong to the same tenant."
+            )
+
+        tenant_id = tenant_ids.pop()
+
+        # --------------------------------------------------------
+        # POINT CONVERSION
+        # --------------------------------------------------------
+
+        points = [
+            self._to_point(
+                embedded_chunk
+            )
+            for embedded_chunk in chunks
+        ]
+
+        # --------------------------------------------------------
+        # TENANT SHARD ROUTING
+        # --------------------------------------------------------
+
+        shard_selector = (
+            models.ShardKeyWithFallback(
+                target=tenant_id,
+                fallback=(
+                    settings.qdrant_default_shard_key
+                ),
+            )
+        )
+
+        # --------------------------------------------------------
+        # NATIVE ASYNC QDRANT WRITE
+        # --------------------------------------------------------
+
+        await self.async_client.upsert(
+            collection_name=(
+                settings.qdrant_collection_name
+            ),
+            points=points,
+            shard_key_selector=shard_selector,
+            wait=True,
+        )
+
+    # ============================================================
     # DENSE SEARCH
-    # ========================================================
+    # ============================================================
 
     async def asearch_dense(
         self,
@@ -404,26 +519,28 @@ class QdrantVectorStore(VectorStore):
             tenant_id=tenant_id,
         )
 
-        response = await self.async_client.query_points(
-            collection_name=(
-                settings.qdrant_collection_name
-            ),
-            query=query_vector,
-            using="dense",
-            query_filter=query_filter,
-            shard_key_selector=shard_selector,
-            limit=top_k,
-            with_payload=True,
-            with_vectors=False,
+        response = (
+            await self.async_client.query_points(
+                collection_name=(
+                    settings.qdrant_collection_name
+                ),
+                query=query_vector,
+                using="dense",
+                query_filter=query_filter,
+                shard_key_selector=shard_selector,
+                limit=top_k,
+                with_payload=True,
+                with_vectors=False,
+            )
         )
 
         return self._convert_results(
             response.points
         )
 
-    # ========================================================
+    # ============================================================
     # SPARSE / BM25 SEARCH
-    # ========================================================
+    # ============================================================
 
     async def asearch_sparse(
         self,
@@ -468,9 +585,9 @@ class QdrantVectorStore(VectorStore):
             values=sparse_query.values,
         )
 
-        # ----------------------------------------------------
+        # --------------------------------------------------------
         # TENANT-SCOPED IDF
-        # ----------------------------------------------------
+        # --------------------------------------------------------
 
         tenant_idf_filter = models.Filter(
             must=[
@@ -491,27 +608,29 @@ class QdrantVectorStore(VectorStore):
             )
         )
 
-        response = await self.async_client.query_points(
-            collection_name=(
-                settings.qdrant_collection_name
-            ),
-            query=sparse_vector,
-            using="bm25",
-            query_filter=query_filter,
-            shard_key_selector=shard_selector,
-            params=sparse_search_params,
-            limit=top_k,
-            with_payload=True,
-            with_vectors=False,
+        response = (
+            await self.async_client.query_points(
+                collection_name=(
+                    settings.qdrant_collection_name
+                ),
+                query=sparse_vector,
+                using="bm25",
+                query_filter=query_filter,
+                shard_key_selector=shard_selector,
+                params=sparse_search_params,
+                limit=top_k,
+                with_payload=True,
+                with_vectors=False,
+            )
         )
 
         return self._convert_results(
             response.points
         )
 
-    # ========================================================
+    # ============================================================
     # HYBRID SEARCH
-    # ========================================================
+    # ============================================================
 
     async def asearch_hybrid(
         self,
@@ -573,9 +692,9 @@ class QdrantVectorStore(VectorStore):
             values=sparse_query.values,
         )
 
-        # ----------------------------------------------------
+        # --------------------------------------------------------
         # TENANT-SCOPED IDF
-        # ----------------------------------------------------
+        # --------------------------------------------------------
 
         tenant_idf_filter = models.Filter(
             must=[
@@ -596,66 +715,68 @@ class QdrantVectorStore(VectorStore):
             )
         )
 
-        # ----------------------------------------------------
+        # --------------------------------------------------------
         # QDRANT HYBRID SEARCH
-        # ----------------------------------------------------
+        # --------------------------------------------------------
 
-        response = await self.async_client.query_points(
-            collection_name=(
-                settings.qdrant_collection_name
-            ),
-
-            # ------------------------------------------------
-            # CANDIDATE RETRIEVAL
-            # ------------------------------------------------
-
-            prefetch=[
-                models.Prefetch(
-                    query=query_vector,
-                    using="dense",
-                    filter=query_filter,
-                    limit=top_k,
+        response = (
+            await self.async_client.query_points(
+                collection_name=(
+                    settings.qdrant_collection_name
                 ),
-                models.Prefetch(
-                    query=sparse_vector,
-                    using="bm25",
-                    filter=query_filter,
-                    params=sparse_search_params,
-                    limit=top_k,
+
+                # ------------------------------------------------
+                # CANDIDATE RETRIEVAL
+                # ------------------------------------------------
+
+                prefetch=[
+                    models.Prefetch(
+                        query=query_vector,
+                        using="dense",
+                        filter=query_filter,
+                        limit=top_k,
+                    ),
+                    models.Prefetch(
+                        query=sparse_vector,
+                        using="bm25",
+                        filter=query_filter,
+                        params=sparse_search_params,
+                        limit=top_k,
+                    ),
+                ],
+
+                # ------------------------------------------------
+                # RECIPROCAL RANK FUSION
+                # ------------------------------------------------
+
+                query=models.FusionQuery(
+                    fusion=models.Fusion.RRF,
                 ),
-            ],
 
-            # ------------------------------------------------
-            # RECIPROCAL RANK FUSION
-            # ------------------------------------------------
+                # ------------------------------------------------
+                # TENANT SHARD ROUTING
+                # ------------------------------------------------
 
-            query=models.FusionQuery(
-                fusion=models.Fusion.RRF,
-            ),
+                shard_key_selector=shard_selector,
 
-            # ------------------------------------------------
-            # TENANT SHARD ROUTING
-            # ------------------------------------------------
+                # ------------------------------------------------
+                # FINAL RESULT SIZE
+                # ------------------------------------------------
 
-            shard_key_selector=shard_selector,
+                limit=top_k,
 
-            # ------------------------------------------------
-            # FINAL RESULT SIZE
-            # ------------------------------------------------
-
-            limit=top_k,
-
-            with_payload=True,
-            with_vectors=False,
+                with_payload=True,
+                with_vectors=False,
+            )
         )
 
         return self._convert_results(
             response.points
         )
 
-    # ========================================================
+    # ============================================================
     # FILTER BUILDER
-    # ========================================================
+    # ============================================================
 
     def _build_filter(
         self,
@@ -680,9 +801,9 @@ class QdrantVectorStore(VectorStore):
             models.FieldCondition
         ] = []
 
-        # --------------------------------------------------
+        # --------------------------------------------------------
         # TENANT FILTER
-        # --------------------------------------------------
+        # --------------------------------------------------------
 
         conditions.append(
             models.FieldCondition(
@@ -693,9 +814,9 @@ class QdrantVectorStore(VectorStore):
             )
         )
 
-        # --------------------------------------------------
+        # --------------------------------------------------------
         # OPTIONAL FILTERS
-        # --------------------------------------------------
+        # --------------------------------------------------------
 
         if filters:
 
@@ -711,18 +832,19 @@ class QdrantVectorStore(VectorStore):
 
                 if key not in allowed_fields:
                     raise ValueError(
-                        f"Unsupported retrieval filter: "
+                        "Unsupported retrieval filter: "
                         f"{key}"
                     )
 
                 if value is None:
                     continue
 
-                # ------------------------------------------
+                # ------------------------------------------------
                 # SINGLE VALUE
-                # ------------------------------------------
+                # ------------------------------------------------
 
                 if isinstance(value, str):
+
                     conditions.append(
                         models.FieldCondition(
                             key=key,
@@ -732,9 +854,9 @@ class QdrantVectorStore(VectorStore):
                         )
                     )
 
-                # ------------------------------------------
+                # ------------------------------------------------
                 # MULTIPLE VALUES
-                # ------------------------------------------
+                # ------------------------------------------------
 
                 elif isinstance(value, list):
 
@@ -752,7 +874,7 @@ class QdrantVectorStore(VectorStore):
 
                 else:
                     raise ValueError(
-                        f"Unsupported filter value "
+                        "Unsupported filter value "
                         f"for field '{key}'"
                     )
 
@@ -760,9 +882,9 @@ class QdrantVectorStore(VectorStore):
             must=conditions,
         )
 
-    # ========================================================
+    # ============================================================
     # RESULT CONVERSION
-    # ========================================================
+    # ============================================================
 
     def _convert_results(
         self,
@@ -797,9 +919,9 @@ class QdrantVectorStore(VectorStore):
 
         return results
 
-    # ========================================================
+    # ============================================================
     # PAYLOAD -> DOCUMENT CHUNK
-    # ========================================================
+    # ============================================================
 
     def _payload_to_document_chunk(
         self,
@@ -871,9 +993,9 @@ class QdrantVectorStore(VectorStore):
             },
         )
 
-    # ========================================================
+    # ============================================================
     # POINT MAPPING
-    # ========================================================
+    # ============================================================
 
     def _to_point(
         self,
@@ -884,27 +1006,27 @@ class QdrantVectorStore(VectorStore):
 
         The Qdrant point contains:
 
-        - dense vector for semantic retrieval
-        - sparse BM25 vector for lexical retrieval
-        - payload containing document and retrieval metadata
+            - dense vector for semantic retrieval
+            - sparse BM25 vector for lexical retrieval
+            - payload containing document/retrieval metadata
         """
 
         chunk = embedded_chunk.chunk
         metadata = chunk.metadata
 
         payload = {
-            # ------------------------------------------------
-            # Tenant
-            # ------------------------------------------------
+            # ----------------------------------------------------
+            # TENANT
+            # ----------------------------------------------------
 
             "tenant_id": metadata.get(
                 "tenant_id",
                 settings.default_tenant_id,
             ),
 
-            # ------------------------------------------------
-            # Identity
-            # ------------------------------------------------
+            # ----------------------------------------------------
+            # IDENTITY
+            # ----------------------------------------------------
 
             "chunk_id": str(
                 chunk.chunk_id
@@ -918,32 +1040,32 @@ class QdrantVectorStore(VectorStore):
                 chunk.document_version_id
             ),
 
-            # ------------------------------------------------
-            # Content
-            # ------------------------------------------------
+            # ----------------------------------------------------
+            # CONTENT
+            # ----------------------------------------------------
 
             "content": chunk.content,
 
-            # ------------------------------------------------
-            # Lineage
-            # ------------------------------------------------
+            # ----------------------------------------------------
+            # LINEAGE
+            # ----------------------------------------------------
 
             "element_ids": [
                 str(element_id)
                 for element_id in chunk.element_ids
             ],
 
-            # ------------------------------------------------
-            # Chunk position / deduplication
-            # ------------------------------------------------
+            # ----------------------------------------------------
+            # CHUNK POSITION / DEDUPLICATION
+            # ----------------------------------------------------
 
             "chunk_index": chunk.chunk_index,
 
             "content_hash": chunk.content_hash,
 
-            # ------------------------------------------------
-            # Content metadata
-            # ------------------------------------------------
+            # ----------------------------------------------------
+            # CONTENT METADATA
+            # ----------------------------------------------------
 
             "content_type": metadata.get(
                 "content_type"
@@ -959,9 +1081,9 @@ class QdrantVectorStore(VectorStore):
                 [],
             ),
 
-            # ------------------------------------------------
-            # Retrieval metadata
-            # ------------------------------------------------
+            # ----------------------------------------------------
+            # RETRIEVAL METADATA
+            # ----------------------------------------------------
 
             "categories": metadata.get(
                 "categories",
@@ -974,18 +1096,26 @@ class QdrantVectorStore(VectorStore):
             ),
         }
 
-        # ----------------------------------------------------
+        # --------------------------------------------------------
         # SPARSE BM25 VECTOR
-        # ----------------------------------------------------
+        # --------------------------------------------------------
 
         sparse_vector = models.SparseVector(
-            indices=embedded_chunk.sparse_vector.indices,
-            values=embedded_chunk.sparse_vector.values,
+            indices=(
+                embedded_chunk
+                .sparse_vector
+                .indices
+            ),
+            values=(
+                embedded_chunk
+                .sparse_vector
+                .values
+            ),
         )
 
-        # ----------------------------------------------------
+        # --------------------------------------------------------
         # QDRANT POINT
-        # ----------------------------------------------------
+        # --------------------------------------------------------
 
         return models.PointStruct(
             id=str(
@@ -998,9 +1128,9 @@ class QdrantVectorStore(VectorStore):
             payload=payload,
         )
 
-    # ========================================================
+    # ============================================================
     # SHARD SELECTOR
-    # ========================================================
+    # ============================================================
 
     def get_shard_selector(
         self,
@@ -1023,9 +1153,9 @@ class QdrantVectorStore(VectorStore):
             ),
         )
 
-    # ========================================================
-    # VALIDATION HELPERS
-    # ========================================================
+    # ============================================================
+    # VALIDATION — DENSE
+    # ============================================================
 
     @staticmethod
     def _validate_dense_query(
@@ -1052,6 +1182,10 @@ class QdrantVectorStore(VectorStore):
                 "top_k must be greater than zero."
             )
 
+    # ============================================================
+    # VALIDATION — SPARSE
+    # ============================================================
+
     @staticmethod
     def _validate_sparse_query(
         sparse_query: SparseEmbedding,
@@ -1067,7 +1201,9 @@ class QdrantVectorStore(VectorStore):
                 "Sparse BM25 query cannot be empty."
             )
 
-        if len(sparse_query.indices) != len(
+        if len(
+            sparse_query.indices
+        ) != len(
             sparse_query.values
         ):
             raise ValueError(
@@ -1085,9 +1221,23 @@ class QdrantVectorStore(VectorStore):
                 "top_k must be greater than zero."
             )
 
-    # ========================================================
+    # ============================================================
+    # SYNC CLIENT LIFECYCLE
+    # ============================================================
+
+    def close(self) -> None:
+        """
+        Close the synchronous Qdrant client.
+
+        Useful for application shutdown when the synchronous
+        client has been initialized.
+        """
+
+        self.client.close()
+
+    # ============================================================
     # ASYNC CLIENT LIFECYCLE
-    # ========================================================
+    # ============================================================
 
     async def aclose(self) -> None:
         """
@@ -1099,41 +1249,22 @@ class QdrantVectorStore(VectorStore):
         await self.async_client.close()
 
 
-    # ========================================================
-    # HELPERS
-    # ========================================================
-
-    @staticmethod
-    def _normalize_shard_key(
-        shard_key: object,
-    ) -> str:
-        """
-        Normalize Qdrant's returned shard-key representation
-        into a comparable string.
-        """
-
-        if isinstance(shard_key, str):
-            return shard_key
-
-        return str(shard_key)
-
-
-# ============================================================
+# ================================================================
 # ROHIT NOTES — INTERVIEW / CODE FLOW
-# ============================================================
+# ================================================================
 
 # So we have two layers of protection/optimization:
-
+#
 # Shard routing
-# → physically narrow the area we query
-
+#     -> physically narrow the area we query
+#
 # Metadata filtering
-# → logically narrow the matching documents/chunks
+#     -> logically narrow the matching documents/chunks
 
 
-# ============================================================
+# ================================================================
 # RETRIEVAL MODES
-# ============================================================
+# ================================================================
 
 # Dense:
 #
@@ -1164,18 +1295,80 @@ class QdrantVectorStore(VectorStore):
 # Hybrid:
 #
 # Query
+#   ├── Dense embedding
+#   └── BM25 sparse representation
+#             ↓
+#        Qdrant hybrid
+#             ↓
+#             RRF
+#             ↓
+#      RetrievedChunk[]
+
+
+# ================================================================
+# INGESTION WRITE PATH
+# ================================================================
+
+# Document
 #   ↓
-# ┌───────────────────┐
-# │ Dense query        │
-# │ BM25 sparse query  │
-# └─────────┬─────────┘
-#           ↓
+# Extraction
+#   ↓
+# Chunking
+#   ↓
+# Dense embedding
+#   +
+# Sparse BM25 embedding
+#   ↓
+# EmbeddedDocumentChunk[]
+#   ↓
+# aupsert()
+#   ↓
+# AsyncQdrantClient
+#   ↓
+# Qdrant
+
+
+# ================================================================
+# TENANT ROUTING
+# ================================================================
+
+# Each write/search operation is tenant-aware.
+#
+# target:
+#     tenant-specific shard
+#
+# fallback:
+#     shared default shard
+#
+# This keeps tenant isolation explicit at the vector-store layer.
+
+
+# ================================================================
+# SYNC VS ASYNC
+# ================================================================
+
+# Synchronous compatibility path:
+#
+# upsert()
+#   ↓
+# QdrantClient
+#
+#
+# Asynchronous production path:
+#
+# aupsert()
+#   ↓
+# AsyncQdrantClient
+#
+#
+# Retrieval:
+#
+# asearch_dense()
+# asearch_sparse()
 # asearch_hybrid()
-#           ↓
-# Dense candidates
-# +
-# BM25 candidates
-#           ↓
-#          RRF
-#           ↓
-# RetrievedChunk[]
+#   ↓
+# AsyncQdrantClient
+#
+#
+# This gives the ingestion and retrieval paths a consistent
+# asynchronous execution model.

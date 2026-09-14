@@ -1,6 +1,10 @@
+import asyncio
 import uuid
 from typing import BinaryIO
 
+from fastapi import BackgroundTasks
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.v1.documents.schemas.document_list_response import (
@@ -22,20 +26,10 @@ from app.utils.hashing import calculate_stream_hash
 
 
 class DocumentService:
-    """
-    Handles document lifecycle operations.
-
-    Responsibilities:
-    - Create documents
-    - Upload document versions
-    - Store original files
-    - Manage categories and tags
-    - Trigger the RAG ingestion pipeline
-    """
 
     def __init__(
         self,
-        db: Session,
+        db: Session | AsyncSession,
         storage_provider: StorageProvider,
         document_ingestion_service: DocumentIngestionService,
     ) -> None:
@@ -44,6 +38,10 @@ class DocumentService:
         self.document_ingestion_service = (
             document_ingestion_service
         )
+
+    # ============================================================
+    # SYNCHRONOUS
+    # ============================================================
 
     def upload_document(
         self,
@@ -54,21 +52,12 @@ class DocumentService:
         categories: list[str] | None = None,
         tags: list[str] | None = None,
     ) -> DocumentUploadResponse:
-        """
-        Upload a new document.
 
-        Flow:
-
-            Create Document
-                ->
-            Add categories and tags
-                ->
-            Calculate hash and file size
-                ->
-            Upload Version 1
-                ->
-            Trigger ingestion
-        """
+        if isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "upload_document() requires a synchronous "
+                "SQLAlchemy Session. Use aupload_document()."
+            )
 
         document_id = uuid.uuid4()
 
@@ -81,24 +70,18 @@ class DocumentService:
 
         self.db.add(document)
 
-        # Add document-level categories.
         self._add_categories(
             document=document,
             categories=categories,
         )
 
-        # Add document-level tags.
         self._add_tags(
             document=document,
             tags=tags,
         )
 
-        # Calculate content hash and file size.
-        #
-        # calculate_stream_hash restores the stream position
-        # after reading so the same stream can be uploaded.
-        content_hash, file_size = calculate_stream_hash(
-            stream
+        content_hash, file_size = (
+            calculate_stream_hash(stream)
         )
 
         return self._upload_document_version(
@@ -111,6 +94,69 @@ class DocumentService:
             file_size=file_size,
         )
 
+    # ============================================================
+    # ASYNCHRONOUS
+    # ============================================================
+
+    async def aupload_document(
+        self,
+        stream: BinaryIO,
+        file_name: str,
+        content_type: str,
+        document_name: str,
+        categories: list[str] | None = None,
+        tags: list[str] | None = None,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> DocumentUploadResponse:
+
+        if not isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "aupload_document() requires an AsyncSession."
+            )
+
+        document_id = uuid.uuid4()
+
+        document = Document(
+            document_id=document_id,
+            document_name=document_name,
+            current_version=0,
+            status="PROCESSING",
+        )
+
+        self.db.add(document)
+
+        await self._aadd_categories(
+            document=document,
+            categories=categories,
+        )
+
+        await self._aadd_tags(
+            document=document,
+            tags=tags,
+        )
+
+        content_hash, file_size = (
+            await asyncio.to_thread(
+                calculate_stream_hash,
+                stream,
+            )
+        )
+
+        return await self._aupload_document_version(
+            document=document,
+            stream=stream,
+            file_name=file_name,
+            content_type=content_type,
+            version=1,
+            content_hash=content_hash,
+            file_size=file_size,
+            background_tasks=background_tasks,
+        )
+
+    # ============================================================
+    # SYNCHRONOUS NEW VERSION
+    # ============================================================
+
     def upload_new_version(
         self,
         document_id: uuid.UUID,
@@ -118,23 +164,12 @@ class DocumentService:
         file_name: str,
         content_type: str,
     ) -> DocumentUploadResponse:
-        """
-        Upload a new version of an existing document.
 
-        Flow:
-
-            Find Document
-                ->
-            Calculate hash
-                ->
-            Check duplicate version
-                ->
-            Create next version
-                ->
-            Upload
-                ->
-            Trigger ingestion
-        """
+        if isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "upload_new_version() requires a synchronous "
+                "SQLAlchemy Session. Use aupload_new_version()."
+            )
 
         document = (
             self.db.query(Document)
@@ -147,12 +182,10 @@ class DocumentService:
         if document is None:
             raise ValueError("Document not found")
 
-        # Calculate content hash and file size.
-        content_hash, file_size = calculate_stream_hash(
-            stream
+        content_hash, file_size = (
+            calculate_stream_hash(stream)
         )
 
-        # Prevent uploading identical document content again.
         existing_version = (
             self.db.query(DocumentVersion)
             .filter(
@@ -167,7 +200,6 @@ class DocumentService:
                 "An identical document version already exists"
             )
 
-        # Determine the next version number.
         version = document.current_version + 1
 
         return self._upload_document_version(
@@ -180,6 +212,80 @@ class DocumentService:
             file_size=file_size,
         )
 
+    # ============================================================
+    # ASYNCHRONOUS NEW VERSION
+    # ============================================================
+
+    async def aupload_new_version(
+        self,
+        document_id: uuid.UUID,
+        stream: BinaryIO,
+        file_name: str,
+        content_type: str,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> DocumentUploadResponse:
+
+        if not isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "aupload_new_version() requires an AsyncSession."
+            )
+
+        result = await self.db.execute(
+            select(Document)
+            .options(
+                selectinload(Document.categories),
+                selectinload(Document.tags),
+            )
+            .where(
+                Document.document_id == document_id
+            )
+        )
+
+        document = result.scalars().first()
+
+        if document is None:
+            raise ValueError("Document not found")
+
+        content_hash, file_size = (
+            await asyncio.to_thread(
+                calculate_stream_hash,
+                stream,
+            )
+        )
+
+        version_result = await self.db.execute(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == document_id,
+                DocumentVersion.content_hash == content_hash,
+            )
+        )
+
+        existing_version = (
+            version_result.scalars().first()
+        )
+
+        if existing_version is not None:
+            raise ValueError(
+                "An identical document version already exists"
+            )
+
+        version = document.current_version + 1
+
+        return await self._aupload_document_version(
+            document=document,
+            stream=stream,
+            file_name=file_name,
+            content_type=content_type,
+            version=version,
+            content_hash=content_hash,
+            file_size=file_size,
+            background_tasks=background_tasks,
+        )
+
+    # ============================================================
+    # SYNCHRONOUS VERSION UPLOAD
+    # ============================================================
+
     def _upload_document_version(
         self,
         document: Document,
@@ -190,24 +296,12 @@ class DocumentService:
         content_hash: str,
         file_size: int,
     ) -> DocumentUploadResponse:
-        """
-        Shared upload flow used by both:
 
-        - upload_document()
-        - upload_new_version()
-
-        Flow:
-
-            Upload original file to storage
-                ->
-            Create DocumentVersion
-                ->
-            Update current version
-                ->
-            Commit database transaction
-                ->
-            Trigger RAG ingestion
-        """
+        if isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "_upload_document_version() requires "
+                "a synchronous Session."
+            )
 
         document_version_id = uuid.uuid4()
         stored_blob_path: str | None = None
@@ -218,19 +312,13 @@ class DocumentService:
         )
 
         try:
-            # --------------------------------------------------
-            # STORE ORIGINAL DOCUMENT
-            # --------------------------------------------------
-
-            stored_blob_path = self.storage_provider.upload(
-                path=blob_path,
-                stream=stream,
-                content_type=content_type,
+            stored_blob_path = (
+                self.storage_provider.upload(
+                    path=blob_path,
+                    stream=stream,
+                    content_type=content_type,
+                )
             )
-
-            # --------------------------------------------------
-            # CREATE DOCUMENT VERSION
-            # --------------------------------------------------
 
             document_version = DocumentVersion(
                 document_version_id=document_version_id,
@@ -245,22 +333,9 @@ class DocumentService:
 
             self.db.add(document_version)
 
-            # Update latest version.
             document.current_version = version
 
-            # Persist document/version before starting ingestion.
             self.db.commit()
-
-            # --------------------------------------------------
-            # EXTRACT DOCUMENT METADATA FOR RAG INDEXING
-            # --------------------------------------------------
-            #
-            # Categories and tags belong to the document in the
-            # relational database.
-            #
-            # They are copied to the ingestion pipeline because
-            # they will later be used as retrieval metadata in
-            # Qdrant.
 
             categories = [
                 category.name
@@ -271,25 +346,6 @@ class DocumentService:
                 tag.name
                 for tag in document.tags
             ]
-
-            # --------------------------------------------------
-            # TRIGGER RAG INGESTION
-            # --------------------------------------------------
-            #
-            # Current:
-            #
-            # Blob Storage
-            #      ->
-            # Extraction
-            #      ->
-            # Chunking
-            #      ->
-            # Embedding
-            #
-            # Future:
-            #
-            #      ->
-            # Qdrant
 
             self.document_ingestion_service.ingest(
                 document=document,
@@ -317,28 +373,183 @@ class DocumentService:
                         stored_blob_path
                     )
                 except Exception:
-                    # Do not hide the original exception
-                    # if cleanup itself fails.
                     pass
 
             raise
+
+    # ============================================================
+    # ASYNCHRONOUS VERSION UPLOAD
+    # ============================================================
+
+    async def _aupload_document_version(
+        self,
+        document: Document,
+        stream: BinaryIO,
+        file_name: str,
+        content_type: str,
+        version: int,
+        content_hash: str,
+        file_size: int,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> DocumentUploadResponse:
+
+        if not isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "_aupload_document_version() requires "
+                "an AsyncSession."
+            )
+
+        document_version_id = uuid.uuid4()
+        stored_blob_path: str | None = None
+
+        blob_path = (
+            f"documents/{document.document_id}/"
+            f"v{version}/{file_name}"
+        )
+
+        try:
+            stored_blob_path = (
+                await self.storage_provider.aupload(
+                    path=blob_path,
+                    stream=stream,
+                    content_type=content_type,
+                )
+            )
+
+            document_version = DocumentVersion(
+                document_version_id=document_version_id,
+                document_id=document.document_id,
+                version=version,
+                file_name=file_name,
+                content_type=content_type,
+                file_size=file_size,
+                content_hash=content_hash,
+                blob_path=stored_blob_path,
+            )
+
+            self.db.add(document_version)
+
+            document.current_version = version
+            document.status = "QUEUED"
+
+            await self.db.commit()
+
+            categories = [
+                category.name
+                for category in document.categories
+            ]
+
+            tags = [
+                tag.name
+                for tag in document.tags
+            ]
+
+            if background_tasks is not None:
+
+                background_tasks.add_task(
+                    self._run_background_ingestion,
+                    document=document,
+                    blob_path=stored_blob_path,
+                    file_name=file_name,
+                    document_version_id=document_version_id,
+                    categories=categories,
+                    tags=tags,
+                )
+
+            else:
+
+                await self.document_ingestion_service.aingest(
+                    document=document,
+                    blob_path=stored_blob_path,
+                    file_name=file_name,
+                    document_version_id=document_version_id,
+                    categories=categories,
+                    tags=tags,
+                )
+
+            return DocumentUploadResponse(
+                document_id=document.document_id,
+                document_version_id=document_version_id,
+                document_name=document.document_name,
+                version=version,
+                status=document.status,
+            )
+
+        except Exception:
+            await self.db.rollback()
+
+            if stored_blob_path:
+                try:
+                    await self.storage_provider.adelete(
+                        stored_blob_path
+                    )
+                except Exception:
+                    pass
+
+            raise
+
+    # ============================================================
+    # BACKGROUND INGESTION
+    # ============================================================
+
+    async def _run_background_ingestion(
+        self,
+        document: Document,
+        blob_path: str,
+        file_name: str,
+        document_version_id: uuid.UUID,
+        categories: list[str],
+        tags: list[str],
+    ) -> None:
+        """
+        Execute RAG ingestion after the HTTP response.
+
+        The task intentionally does not use the database session
+        for ingestion because the upload transaction has already
+        been committed.
+        """
+
+        try:
+
+            document.status = "PROCESSING"
+
+            await self.document_ingestion_service.aingest(
+                document=document,
+                blob_path=blob_path,
+                file_name=file_name,
+                document_version_id=document_version_id,
+                categories=categories,
+                tags=tags,
+            )
+
+            document.status = "INDEXED"
+
+        except Exception:
+
+            document.status = "FAILED"
+
+            raise
+
+    # ============================================================
+    # CATEGORIES
+    # ============================================================
 
     def _add_categories(
         self,
         document: Document,
         categories: list[str] | None,
     ) -> None:
-        """
-        Attach categories to the document.
-
-        Reuses an existing category when available;
-        otherwise creates a new one.
-        """
 
         if not categories:
             return
 
+        if isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "_add_categories() requires a synchronous Session."
+            )
+
         for category_name in categories:
+
             category = (
                 self.db.query(Category)
                 .filter(
@@ -349,28 +560,64 @@ class DocumentService:
 
             if category is None:
                 category = Category(
-                    name=category_name,
+                    name=category_name
                 )
                 self.db.add(category)
 
             document.categories.append(category)
+
+    async def _aadd_categories(
+        self,
+        document: Document,
+        categories: list[str] | None,
+    ) -> None:
+
+        if not categories:
+            return
+
+        if not isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "_aadd_categories() requires an AsyncSession."
+            )
+
+        for category_name in categories:
+
+            result = await self.db.execute(
+                select(Category).where(
+                    Category.name == category_name
+                )
+            )
+
+            category = result.scalars().first()
+
+            if category is None:
+                category = Category(
+                    name=category_name
+                )
+                self.db.add(category)
+
+            document.categories.append(category)
+
+    # ============================================================
+    # TAGS
+    # ============================================================
 
     def _add_tags(
         self,
         document: Document,
         tags: list[str] | None,
     ) -> None:
-        """
-        Attach tags to the document.
-
-        Reuses an existing tag when available;
-        otherwise creates a new one.
-        """
 
         if not tags:
             return
 
+        if isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "_add_tags() requires a synchronous Session."
+            )
+
         for tag_name in tags:
+
             tag = (
                 self.db.query(Tag)
                 .filter(
@@ -381,18 +628,57 @@ class DocumentService:
 
             if tag is None:
                 tag = Tag(
-                    name=tag_name,
+                    name=tag_name
                 )
                 self.db.add(tag)
 
             document.tags.append(tag)
 
+    async def _aadd_tags(
+        self,
+        document: Document,
+        tags: list[str] | None,
+    ) -> None:
+
+        if not tags:
+            return
+
+        if not isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "_aadd_tags() requires an AsyncSession."
+            )
+
+        for tag_name in tags:
+
+            result = await self.db.execute(
+                select(Tag).where(
+                    Tag.name == tag_name
+                )
+            )
+
+            tag = result.scalars().first()
+
+            if tag is None:
+                tag = Tag(
+                    name=tag_name
+                )
+                self.db.add(tag)
+
+            document.tags.append(tag)
+
+    # ============================================================
+    # ACTIVE DOCUMENTS
+    # ============================================================
+
     def get_active_documents(
         self,
     ) -> DocumentListResponse:
-        """
-        Return all active, non-deleted documents.
-        """
+
+        if isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "get_active_documents() requires a "
+                "synchronous Session."
+            )
 
         documents = (
             self.db.query(Document)
@@ -418,11 +704,13 @@ class DocumentService:
                     status=document.status,
                     categories=[
                         category.name
-                        for category in document.categories
+                        for category
+                        in document.categories
                     ],
                     tags=[
                         tag.name
-                        for tag in document.tags
+                        for tag
+                        in document.tags
                     ],
                     created_at=document.created_at,
                 )
@@ -430,125 +718,51 @@ class DocumentService:
             ]
         )
 
+    async def aget_active_documents(
+        self,
+    ) -> DocumentListResponse:
 
-# ============================================================
-# ROHIT NOTES —
-# ============================================================
+        if not isinstance(self.db, AsyncSession):
+            raise RuntimeError(
+                "aget_active_documents() requires "
+                "an AsyncSession."
+            )
 
-# Why is ingestion triggered from _upload_document_version()?
-#
-# Both upload_document() and upload_new_version() eventually use
-# the same shared method.
-#
-# upload_document()
-#       |
-#       └──────> _upload_document_version()
-#                       |
-# upload_new_version()  |
-#       |                |
-#       └────────────────┘
-#                       ↓
-#              Store document version
-#                       ↓
-#              Trigger ingestion
-#
-# This avoids duplicating ingestion logic in both methods.
+        result = await self.db.execute(
+            select(Document)
+            .options(
+                selectinload(Document.categories),
+                selectinload(Document.tags),
+            )
+            .where(
+                Document.deleted_at.is_(None)
+            )
+            .order_by(
+                Document.created_at.desc()
+            )
+        )
 
+        documents = result.scalars().all()
 
-# Why commit before ingestion?
-#
-# We first ensure that:
-#
-# 1. The original file is stored successfully.
-# 2. The DocumentVersion record is persisted.
-# 3. document.current_version is updated.
-#
-# Only after that do we start RAG ingestion.
-#
-# This ensures ingestion works against a persisted document.
-
-
-# Why does ingestion read from Blob Storage?
-#
-# The original upload stream may already have been read for:
-#
-# - Hash calculation
-# - File size calculation
-# - Storage upload
-#
-# Instead of depending on stream position, Blob Storage becomes
-# the single source of truth:
-#
-# Upload
-#   ->
-# Persist to Blob Storage
-#   ->
-# Download persisted file
-#   ->
-# RAG ingestion
-
-
-# Current flow:
-#
-# POST /documents
-#       |
-#       ↓
-# upload_document()
-#       |
-#       ↓
-# _upload_document_version()
-#       |
-#       ↓
-# Blob Storage
-#       |
-#       ↓
-# DocumentIngestionService
-#       |
-#       ↓
-# DoclingDocumentExtractor
-#       |
-#       ├── TEXT
-#       ├── TABLE
-#       └── Visual
-#              |
-#              ↓
-#        Vision-capable LLM
-#              |
-#              ↓
-#       IMAGE / CHART / DIAGRAM
-#
-#
-# POST /documents/{document_id}/versions follows the same
-# _upload_document_version() -> ingestion pipeline.
-
-
-# Future improvement:
-#
-# Currently ingestion runs synchronously after upload.
-#
-# For large PDFs and vision processing, this should eventually move
-# to a background worker architecture:
-#
-# API
-#   ->
-# Store Document + Version
-#   ->
-# Create Ingestion Job
-#   ->
-# Return response immediately
-#
-# Worker
-#   ->
-# Download from Blob
-#   ->
-# Extract
-#   ->
-# Vision Analysis
-#   ->
-# Chunk
-#   ->
-# Embed
-#   ->
-# Vector DB
-#
-# This prevents long-running RAG processing from blocking the API.
+        return DocumentListResponse(
+            documents=[
+                DocumentListItem(
+                    document_id=document.document_id,
+                    document_name=document.document_name,
+                    current_version=document.current_version,
+                    status=document.status,
+                    categories=[
+                        category.name
+                        for category
+                        in document.categories
+                    ],
+                    tags=[
+                        tag.name
+                        for tag
+                        in document.tags
+                    ],
+                    created_at=document.created_at,
+                )
+                for document in documents
+            ]
+        )

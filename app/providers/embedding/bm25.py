@@ -16,19 +16,18 @@ class BM25SparseEmbeddingProvider(
     """
     BM25 sparse embedding provider.
 
-    The FastEmbed BM25 model is initialized once when the
-    provider is created and reused for subsequent requests.
+    FastEmbed inference is local and synchronous.
 
-    The model name and cache location are configurable through
-    application settings.
-
-    Query-time sparse embedding supports an asynchronous path.
+    Async methods therefore execute the blocking FastEmbed
+    operation in a worker thread so the FastAPI event loop
+    remains responsive.
     """
 
     def __init__(self) -> None:
-        # --------------------------------------------------
-        # MODEL CACHE
-        # --------------------------------------------------
+
+        # ========================================================
+        # CACHE DIRECTORY
+        # ========================================================
 
         cache_dir = Path(
             settings.fastembed_cache_dir
@@ -39,18 +38,18 @@ class BM25SparseEmbeddingProvider(
             exist_ok=True,
         )
 
-        # --------------------------------------------------
+        # ========================================================
         # MODEL
-        # --------------------------------------------------
+        # ========================================================
 
         self.model = SparseTextEmbedding(
             model_name=settings.bm25_model_name,
             cache_dir=str(cache_dir),
         )
 
-    # ========================================================
+    # ============================================================
     # SYNCHRONOUS SINGLE GENERATION
-    # ========================================================
+    # ============================================================
 
     def generate(
         self,
@@ -60,19 +59,23 @@ class BM25SparseEmbeddingProvider(
         Generate a BM25 sparse representation for one text.
         """
 
-        self._validate_text(text)
+        self._validate_text(
+            text
+        )
 
         embedding = next(
-            self.model.embed([text])
+            self.model.embed(
+                [text]
+            )
         )
 
         return self._to_sparse_embedding(
             embedding
         )
 
-    # ========================================================
+    # ============================================================
     # ASYNCHRONOUS SINGLE GENERATION
-    # ========================================================
+    # ============================================================
 
     async def agenerate(
         self,
@@ -81,12 +84,13 @@ class BM25SparseEmbeddingProvider(
         """
         Generate a BM25 sparse representation asynchronously.
 
-        FastEmbed inference is synchronous/local, so the blocking
-        model operation is executed in a worker thread rather than
-        blocking the FastAPI event loop.
+        FastEmbed is synchronous/local, so inference is moved to
+        a worker thread.
         """
 
-        self._validate_text(text)
+        self._validate_text(
+            text
+        )
 
         embedding = await asyncio.to_thread(
             self._generate_single_embedding,
@@ -97,9 +101,9 @@ class BM25SparseEmbeddingProvider(
             embedding
         )
 
-    # ========================================================
+    # ============================================================
     # SYNCHRONOUS BATCH GENERATION
-    # ========================================================
+    # ============================================================
 
     def generate_batch(
         self,
@@ -113,9 +117,13 @@ class BM25SparseEmbeddingProvider(
             return []
 
         for text in texts:
-            self._validate_text(text)
+            self._validate_text(
+                text
+            )
 
-        embeddings = self.model.embed(texts)
+        embeddings = self.model.embed(
+            texts
+        )
 
         return [
             self._to_sparse_embedding(
@@ -124,28 +132,92 @@ class BM25SparseEmbeddingProvider(
             for embedding in embeddings
         ]
 
-    # ========================================================
+    # ============================================================
+    # ASYNCHRONOUS BATCH GENERATION
+    # ============================================================
+
+    async def agenerate_batch(
+        self,
+        texts: list[str],
+    ) -> list[SparseEmbedding]:
+        """
+        Generate BM25 sparse representations asynchronously.
+
+        FastEmbed's batch operation is synchronous/local, so the
+        complete batch runs in one worker thread.
+
+        This is more efficient than creating one worker task per
+        chunk because FastEmbed already supports batch inference.
+        """
+
+        if texts is None:
+            raise ValueError(
+                "Sparse embedding texts cannot be None."
+            )
+
+        if not texts:
+            return []
+
+        for text in texts:
+            self._validate_text(
+                text
+            )
+
+        embeddings = await asyncio.to_thread(
+            self._generate_batch_embeddings,
+            texts,
+        )
+
+        return [
+            self._to_sparse_embedding(
+                embedding
+            )
+            for embedding in embeddings
+        ]
+
+    # ============================================================
     # INTERNAL SINGLE EMBEDDING
-    # ========================================================
+    # ============================================================
 
     def _generate_single_embedding(
         self,
         text: str,
     ):
         """
-        Run the blocking FastEmbed inference for one text.
+        Run blocking FastEmbed inference for one text.
 
-        This method is intentionally synchronous because it is
-        executed inside asyncio.to_thread().
+        Called from asyncio.to_thread().
         """
 
         return next(
-            self.model.embed([text])
+            self.model.embed(
+                [text]
+            )
         )
 
-    # ========================================================
+    # ============================================================
+    # INTERNAL BATCH EMBEDDING
+    # ============================================================
+
+    def _generate_batch_embeddings(
+        self,
+        texts: list[str],
+    ):
+        """
+        Run blocking FastEmbed batch inference.
+
+        Called from asyncio.to_thread().
+        """
+
+        return list(
+            self.model.embed(
+                texts
+            )
+        )
+
+    # ============================================================
     # SPARSE EMBEDDING MAPPING
-    # ========================================================
+    # ============================================================
 
     @staticmethod
     def _to_sparse_embedding(
@@ -167,9 +239,9 @@ class BM25SparseEmbeddingProvider(
             ],
         )
 
-    # ========================================================
+    # ============================================================
     # VALIDATION
-    # ========================================================
+    # ============================================================
 
     @staticmethod
     def _validate_text(
@@ -178,6 +250,11 @@ class BM25SparseEmbeddingProvider(
         """
         Validate sparse embedding input.
         """
+
+        if not isinstance(text, str):
+            raise TypeError(
+                "Text must be a string."
+            )
 
         if not text or not text.strip():
             raise ValueError(
