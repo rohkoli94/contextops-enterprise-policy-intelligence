@@ -1,5 +1,6 @@
 from collections.abc import Awaitable, Callable
 
+from app.prompts.llm_generation import LLM_GENERATION_SYSTEM_PROMPT
 from app.providers.llm.base import (
     LLMProvider,
     LLMRequest,
@@ -28,16 +29,7 @@ def create_llm_generation_node(
         context = state.get("context", "")
 
         request = LLMRequest(
-            system_prompt=(
-                "You are an enterprise policy intelligence "
-                "assistant. Answer the user's question using "
-                "only the provided policy evidence. "
-                "Do not invent facts. "
-                "When the evidence is insufficient, clearly "
-                "state that the answer cannot be determined "
-                "from the available policy documents. "
-                "Cite the provided sources when appropriate."
-            ),
+            system_prompt=LLM_GENERATION_SYSTEM_PROMPT,
             user_prompt=question,
             context=context,
         )

@@ -43,8 +43,9 @@ class FakeQueryRewriter:
     def __init__(
         self,
         rewritten_query: str = (
-            "manager notice period policy "
-            "employee resignation notice"
+            "business loan underwriting "
+            "credit financial checks "
+            "debt service collateral eligibility"
         ),
     ) -> None:
         self.rewritten_query = rewritten_query
@@ -146,20 +147,32 @@ class FakeRetrievalValidator:
 @pytest.mark.asyncio
 async def test_recovery_reformulates_retrieves_reranks_and_validates() -> None:
     recovery_query = (
-        "manager notice period policy "
-        "employee resignation notice"
+        "business loan underwriting "
+        "credit financial checks "
+        "debt service collateral eligibility"
     )
 
     retrieved_documents = [
         make_chunk(
             chunk_id="chunk-001",
-            content="Managers have a three-month notice period.",
+            content=(
+                "Business-loan underwriting reviews the "
+                "borrower's credit profile, business vintage, "
+                "financial performance, banking behaviour, "
+                "debt-service capacity, and applicable "
+                "collateral requirements."
+            ),
             score=0.91,
             reranker_score=2.8,
         ),
         make_chunk(
             chunk_id="chunk-002",
-            content="Employees must submit notice in writing.",
+            content=(
+                "Existing business-loan borrowers are assessed "
+                "using repayment history, current financial "
+                "position, banking behaviour, and ongoing "
+                "debt-service capacity."
+            ),
             score=0.84,
             reranker_score=1.1,
         ),
@@ -168,13 +181,24 @@ async def test_recovery_reformulates_retrieves_reranks_and_validates() -> None:
     reranked_documents = [
         make_chunk(
             chunk_id="chunk-001",
-            content="Managers have a three-month notice period.",
+            content=(
+                "Business-loan underwriting reviews the "
+                "borrower's credit profile, business vintage, "
+                "financial performance, banking behaviour, "
+                "debt-service capacity, and applicable "
+                "collateral requirements."
+            ),
             score=0.91,
             reranker_score=2.8,
         ),
         make_chunk(
             chunk_id="chunk-002",
-            content="Employees must submit notice in writing.",
+            content=(
+                "Existing business-loan borrowers are assessed "
+                "using repayment history, current financial "
+                "position, banking behaviour, and ongoing "
+                "debt-service capacity."
+            ),
             score=0.84,
             reranker_score=1.1,
         ),
@@ -214,21 +238,26 @@ async def test_recovery_reformulates_retrieves_reranks_and_validates() -> None:
     )
 
     state = {
-        "query": "What about managers?",
+        "query": "What about existing borrowers?",
         "tenant_id": "tenant-001",
         "filters": {
             "content_type": "text",
         },
         "contextualized_query": (
-            "What is the notice period policy for managers?"
+            "What underwriting checks apply to "
+            "existing business-loan borrowers?"
         ),
         "conversation_summary": (
-            "User is asking about notice period policy."
+            "User is asking about business-loan "
+            "underwriting checks."
         ),
         "recent_messages": [
             {
                 "role": "user",
-                "content": "What is the notice period?",
+                "content": (
+                    "What are the key underwriting "
+                    "checks for a business loan?"
+                ),
             }
         ],
         "retry_count": 0,
@@ -240,7 +269,9 @@ async def test_recovery_reformulates_retrieves_reranks_and_validates() -> None:
     # Original query must remain unchanged.
     # --------------------------------------------------------
 
-    assert result["query"] == "What about managers?"
+    assert result["query"] == (
+        "What about existing borrowers?"
+    )
 
     # --------------------------------------------------------
     # Recovery query is stored separately.
@@ -309,13 +340,17 @@ async def test_recovery_reformulates_retrieves_reranks_and_validates() -> None:
     assert query_rewriter.received_query is not None
 
     assert (
-        "What is the notice period policy for managers?"
+        "What underwriting checks apply to "
+        "existing business-loan borrowers?"
         in query_rewriter.received_query
     )
 
     assert (
         query_rewriter.received_summary
-        == "User is asking about notice period policy."
+        == (
+            "User is asking about business-loan "
+            "underwriting checks."
+        )
     )
 
     # --------------------------------------------------------
@@ -427,11 +462,15 @@ async def test_recovery_safe_abstains_when_retry_limit_is_reached() -> None:
     )
 
     state = {
-        "query": "What is the leave policy?",
+        "query": (
+            "What are the key underwriting checks "
+            "for a business loan?"
+        ),
         "tenant_id": "tenant-001",
         "filters": None,
         "contextualized_query": (
-            "What is the leave policy?"
+            "What are the key underwriting checks "
+            "for a business loan?"
         ),
         "retry_count": 1,
     }
@@ -473,7 +512,9 @@ async def test_recovery_safe_abstains_when_retry_limit_is_reached() -> None:
 async def test_recovery_safe_abstains_when_retrieval_returns_nothing() -> None:
     query_rewriter = FakeQueryRewriter(
         rewritten_query=(
-            "employee annual leave vacation policy"
+            "business loan underwriting "
+            "credit financial checks "
+            "debt service collateral eligibility"
         ),
     )
 
@@ -502,13 +543,17 @@ async def test_recovery_safe_abstains_when_retrieval_returns_nothing() -> None:
     )
 
     state = {
-        "query": "What is the leave policy?",
+        "query": (
+            "What are the key underwriting checks "
+            "for a business loan?"
+        ),
         "tenant_id": "tenant-001",
         "filters": {
             "document_type": "policy",
         },
         "contextualized_query": (
-            "What is the leave policy?"
+            "What are the key underwriting checks "
+            "for a business loan?"
         ),
         "retry_count": 0,
     }
@@ -524,7 +569,9 @@ async def test_recovery_safe_abstains_when_retrieval_returns_nothing() -> None:
     assert result["recovery_success"] is False
 
     assert result["recovery_query"] == (
-        "employee annual leave vacation policy"
+        "business loan underwriting "
+        "credit financial checks "
+        "debt service collateral eligibility"
     )
 
     assert result["answer"] == (
@@ -543,7 +590,11 @@ async def test_recovery_safe_abstains_when_retrieval_returns_nothing() -> None:
     # Retrieval was attempted exactly once.
     assert (
         hybrid_retriever.received_query
-        == "employee annual leave vacation policy"
+        == (
+            "business loan underwriting "
+            "credit financial checks "
+            "debt service collateral eligibility"
+        )
     )
 
     assert (

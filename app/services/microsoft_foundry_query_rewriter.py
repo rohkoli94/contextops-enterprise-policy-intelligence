@@ -1,3 +1,6 @@
+from app.prompts.query_contextualization import (
+    QUERY_CONTEXTUALIZATION_SYSTEM_PROMPT,
+)
 from app.providers.llm.base import LLMProvider, LLMRequest
 from app.services.query_rewriter import QueryRewriter
 
@@ -37,23 +40,6 @@ class MicrosoftFoundryQueryRewriter(QueryRewriter):
             recent_messages
         )
 
-        system_prompt = """
-You are the query contextualization component of an
-enterprise policy retrieval system.
-
-Your job is to convert the user's current conversational
-question into a standalone retrieval query.
-
-Rules:
-1. Resolve conversational references using the supplied context.
-2. Preserve the user's intent.
-3. Do not answer the question.
-4. Do not invent facts.
-5. Return only the standalone retrieval query.
-6. Keep the query concise and suitable for hybrid BM25 and
-   dense retrieval.
-""".strip()
-
         user_prompt = f"""
 Conversation summary:
 {summary}
@@ -69,7 +55,7 @@ Standalone retrieval query:
 
         response = await self.llm_provider.agenerate(
             LLMRequest(
-                system_prompt=system_prompt,
+                system_prompt=QUERY_CONTEXTUALIZATION_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
             )
         )
