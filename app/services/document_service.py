@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, selectinload
 
+from app.db.session import AsyncSessionLocal
 from app.api.v1.documents.schemas.document_list_response import (
     DocumentListItem,
     DocumentListResponse,
@@ -26,7 +27,6 @@ from app.utils.hashing import calculate_stream_hash
 
 
 class DocumentService:
-
     def __init__(
         self,
         db: Session | AsyncSession,
@@ -448,7 +448,7 @@ class DocumentService:
 
                 background_tasks.add_task(
                     self._run_background_ingestion,
-                    document=document,
+                    document_id=document.document_id,
                     blob_path=stored_blob_path,
                     file_name=file_name,
                     document_version_id=document_version_id,
@@ -494,7 +494,7 @@ class DocumentService:
 
     async def _run_background_ingestion(
         self,
-        document: Document,
+        document_id: uuid.UUID,
         blob_path: str,
         file_name: str,
         document_version_id: uuid.UUID,
@@ -504,31 +504,68 @@ class DocumentService:
         """
         Execute RAG ingestion after the HTTP response.
 
-        The task intentionally does not use the database session
-        for ingestion because the upload transaction has already
-        been committed.
+        The background task uses its own AsyncSession because the
+        request-scoped session used during upload has already been
+        committed and will be closed after the HTTP request.
+
+        Status lifecycle:
+
+            QUEUED
+               ->
+            PROCESSING
+               ->
+            INDEXED
+
+        On ingestion failure:
+
+            PROCESSING
+               ->
+            FAILED
         """
 
-        try:
+        async with AsyncSessionLocal() as db:
 
-            document.status = "PROCESSING"
-
-            await self.document_ingestion_service.aingest(
-                document=document,
-                blob_path=blob_path,
-                file_name=file_name,
-                document_version_id=document_version_id,
-                categories=categories,
-                tags=tags,
+            result = await db.execute(
+                select(Document).where(
+                    Document.document_id == document_id
+                )
             )
 
-            document.status = "INDEXED"
+            document = result.scalars().first()
 
-        except Exception:
+            if document is None:
+                raise ValueError(
+                    f"Document not found for background ingestion: "
+                    f"{document_id}"
+                )
 
-            document.status = "FAILED"
+            try:
+                document.status = "PROCESSING"
 
-            raise
+                await db.commit()
+
+                await self.document_ingestion_service.aingest(
+                    document=document,
+                    blob_path=blob_path,
+                    file_name=file_name,
+                    document_version_id=document_version_id,
+                    categories=categories,
+                    tags=tags,
+                )
+
+                document.status = "INDEXED"
+
+                await db.commit()
+
+            except Exception:
+                document.status = "FAILED"
+
+                try:
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
+
+                raise
 
     # ============================================================
     # CATEGORIES
@@ -562,6 +599,7 @@ class DocumentService:
                 category = Category(
                     name=category_name
                 )
+
                 self.db.add(category)
 
             document.categories.append(category)
@@ -594,6 +632,7 @@ class DocumentService:
                 category = Category(
                     name=category_name
                 )
+
                 self.db.add(category)
 
             document.categories.append(category)
@@ -630,6 +669,7 @@ class DocumentService:
                 tag = Tag(
                     name=tag_name
                 )
+
                 self.db.add(tag)
 
             document.tags.append(tag)
@@ -662,6 +702,7 @@ class DocumentService:
                 tag = Tag(
                     name=tag_name
                 )
+
                 self.db.add(tag)
 
             document.tags.append(tag)

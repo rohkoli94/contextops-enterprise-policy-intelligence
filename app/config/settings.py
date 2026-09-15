@@ -13,6 +13,23 @@ class Settings(BaseSettings):
     api_base_url: str = "http://127.0.0.1:8000"
 
     # ========================================================
+    # LLM Provider
+    # ========================================================
+
+    # Controls which provider is used for the final LLM
+    # generation path.
+    #
+    # Current supported provider:
+    #   microsoft_foundry
+    #
+    # Future provider:
+    #   open_source
+    #
+    # The open-source provider will be introduced later
+    # without changing the query workflow.
+    llm_provider: str = "microsoft_foundry"
+
+    # ========================================================
     # Microsoft Foundry
     # ========================================================
 
@@ -76,12 +93,16 @@ class Settings(BaseSettings):
 
     default_tenant_id: str = "contextops"
 
+    # ========================================================
     # BM25 sparse embedding model
+    # ========================================================
+
     bm25_model_name: str = "Qdrant/bm25"
     sparse_embedding_provider: str = "bm25"
 
-    #FastEmbed - For production Docker, we'll later override it with something such as:/app/.cache/fastembed
-    fastembed_cache_dir: str = ".cache/fastembed" 
+    # FastEmbed - For production Docker, we'll later override
+    # it with something such as /app/.cache/fastembed
+    fastembed_cache_dir: str = ".cache/fastembed"
 
     # ========================================================
     # Retrieval / Query
@@ -100,17 +121,17 @@ class Settings(BaseSettings):
     # Hard token budget for the final LLM context.
     context_max_tokens: int = 6000
 
-
-    # =========================================================
+    # ========================================================
     # REDIS CACHE
-    # =========================================================
+    # ========================================================
+
     redis_url: str = "redis://localhost:6379/0"
     redis_cache_ttl_seconds: int = 300
     redis_cache_key_prefix: str = "contextops:cache:"
 
-    # =========================================================
+    # ========================================================
     # LANGSMITH
-    # =========================================================
+    # ========================================================
 
     langsmith_tracing: bool = False
     langsmith_api_key: str | None = None
@@ -118,10 +139,10 @@ class Settings(BaseSettings):
     langsmith_endpoint: str = "https://api.smith.langchain.com"
     langsmith_workspace_id: str | None = None
 
-
-    # =========================================================
+    # ========================================================
     # PYDANTIC SETTINGS
-    # =========================================================
+    # ========================================================
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

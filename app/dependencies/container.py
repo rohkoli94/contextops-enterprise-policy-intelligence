@@ -12,8 +12,8 @@ from app.guardrails import (
     RegexPIIAnalyzer,
     TenantIsolationGuard,
 )
-from app.providers.llm.microsoft_foundry import (
-    MicrosoftFoundryProvider,
+from app.providers.llm.factory import (
+    get_llm_provider,
 )
 from app.rag.retrieval.baseline_grounding_validator import (
     BaselineGroundingValidator,
@@ -49,7 +49,14 @@ def create_query_service() -> QueryService:
     # PROVIDERS
     # ========================================================
 
-    llm_provider = MicrosoftFoundryProvider()
+    # Provider selection is configuration-driven.
+    #
+    # Example:
+    #   LLM_PROVIDER=microsoft_foundry
+    #
+    # A future open-source provider can be selected without
+    # changing the query workflow.
+    llm_provider = get_llm_provider()
 
     embedding_provider = get_embedding_provider()
 

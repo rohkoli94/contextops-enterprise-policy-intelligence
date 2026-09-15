@@ -1109,6 +1109,149 @@ Upload → PostgreSQL + Blob → 202 Accepted
               Extract → Chunk → Embed → Qdrant
 ```
 
+## Day 22 — Local Infrastructure, Configuration & Application Hardening
+
+Hardened the ContextOps application foundation to prepare for complete local end-to-end validation with real infrastructure and integrations.
+
+### Changes
+
+* Registered the Documents router in the versioned API router
+* Hardened background ingestion status handling with database-backed document lifecycle updates
+* Added Redis configuration to `.env.example`
+* Added PostgreSQL to the local Docker Compose infrastructure
+* Defined the local infrastructure contract for PostgreSQL, Redis and Qdrant
+* Updated Docker Compose application configuration for container-to-container service communication
+* Updated Alembic configuration to use the application database settings and application metadata
+* Added configurable LLM provider selection through `LLM_PROVIDER`
+* Added an LLM provider factory to keep provider selection separate from application services
+* Preserved `MicrosoftFoundryProvider` as the current production/query provider
+* Prepared the provider architecture for a future open-source multimodal LLM provider without changing the query workflow
+* Aligned `.env` and `.env.example` configuration sections and variables
+* Documented local-development versus Docker service endpoints
+* Prepared the application for real PostgreSQL, Redis and Qdrant integration testing
+
+### LLM Provider Architecture
+
+The application now selects the LLM implementation through configuration rather than directly constructing a provider inside the query dependency container.
+
+```text
+                    LLM_PROVIDER
+                         │
+                         ▼
+                  LLM Provider Factory
+                         │
+              ┌──────────┴──────────┐
+              ↓                     ↓
+   MicrosoftFoundryProvider   OpenSourceProvider
+          (current)               (future)
+              │
+              ▼
+      Microsoft Foundry
+```
+
+The application continues to depend on the provider-neutral `LLMProvider` abstraction.
+
+This allows an alternative LLM implementation to be introduced without changing `QueryService` or the LangGraph query workflow.
+
+### Local Infrastructure
+
+```text
+                    ContextOps
+                        │
+             ┌──────────┼──────────┐
+             ↓          ↓          ↓
+        PostgreSQL    Redis      Qdrant
+          :5432       :6379       :6333
+             │          │          │
+             ↓          ↓          ↓
+        Source of     Cache      Retrieval
+          Truth                    Index
+```
+
+### Docker Compose
+
+The local application infrastructure now includes:
+
+```text
+Docker Compose
+      │
+      ├── ContextOps
+      │     └── FastAPI
+      │
+      ├── PostgreSQL
+      │
+      ├── Redis
+      │
+      └── Qdrant Cluster
+            ├── Node 1
+            ├── Node 2
+            └── Node 3
+```
+
+### Configuration Strategy
+
+```text
+.env / Environment Variables
+              │
+              ▼
+       Pydantic Settings
+              │
+              ▼
+      Application Services
+              │
+       ┌──────┴──────┐
+       ↓             ↓
+   Providers      Infrastructure
+       │             │
+       ↓             ↓
+ Foundry        PostgreSQL
+                Redis
+                Qdrant
+```
+
+Local development uses localhost endpoints, while Docker Compose overrides service endpoints with Docker service hostnames.
+
+### Day 22 Outcome
+
+The application foundation is now prepared for the next validation stage:
+
+```text
+PostgreSQL
+     +
+Qdrant
+     +
+Redis
+     +
+Azure Blob
+     +
+Microsoft Foundry
+     ↓
+FastAPI
+     ↓
+Streamlit
+     ↓
+Real PDF Upload
+     ↓
+Background Ingestion
+     ↓
+Extract
+     ↓
+Chunk
+     ↓
+Embed
+     ↓
+Qdrant
+     ↓
+Hybrid Retrieval
+     ↓
+LangGraph
+     ↓
+Microsoft Foundry
+     ↓
+Grounded Answer + Citations
+```
+
+
 ### Status
 
 - Day 1 — Project Foundation ✅
@@ -1129,6 +1272,7 @@ Upload → PostgreSQL + Blob → 202 Accepted
 - Day 16 — Hybrid Retrieval Foundation ✅
 - Day 17 — Query Service & Async Query Pipeline ✅
 - Day 18 — LangGraph + State + Conversation Intelligence ✅
-- Day 19 — Advanced Retrieval + Confidence + Recovery
-- Day 20  ✓ ContextOps / caching / observability / evaluation
-- Day 21 — Async Ingestion + Background Processing
+- Day 19 — Advanced Retrieval + Confidence + Recovery ✅
+- Day 20 — ContextOps / caching / observability / evaluation ✅
+- Day 21 — Async Ingestion + Background Processing ✅
+- Day 22 — Local Infrastructure, Configuration & Application Hardening ✅
