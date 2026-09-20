@@ -1,12 +1,13 @@
 from collections.abc import Callable
 from typing import Any
 
-from azure.ai.projects import AIProjectClient
-from azure.ai.projects.aio import AIProjectClient as AsyncAIProjectClient
 from azure.identity import DefaultAzureCredential
+from azure.identity import get_bearer_token_provider
 from azure.identity.aio import (
     DefaultAzureCredential as AsyncDefaultAzureCredential,
 )
+from openai import AsyncAzureOpenAI
+from openai import AzureOpenAI
 
 from app.config.settings import settings
 from app.providers.embedding.base import (
@@ -23,6 +24,10 @@ class MicrosoftFoundryEmbeddingProvider(
 ):
     """
     Microsoft Foundry embedding provider.
+
+    Embeddings are sent directly to the Azure OpenAI resource
+    endpoint rather than through the Microsoft Foundry project
+    OpenAI client.
 
     Supports:
 
@@ -43,6 +48,12 @@ class MicrosoftFoundryEmbeddingProvider(
     MAX_TOKENS_PER_REQUEST = 300_000
     MAX_TOKENS_PER_INPUT = 8192
 
+    AZURE_COGNITIVE_SERVICES_SCOPE = (
+        "https://cognitiveservices.azure.com/.default"
+    )
+
+    AZURE_OPENAI_API_VERSION = "2024-10-21"
+
     def __init__(
         self,
         token_counter: Callable[[str], int],
@@ -50,35 +61,49 @@ class MicrosoftFoundryEmbeddingProvider(
         self.token_counter = token_counter
 
         # ========================================================
-        # SYNCHRONOUS CLIENTS
+        # SYNCHRONOUS AZURE CREDENTIAL
         # ========================================================
 
         self.credential = DefaultAzureCredential()
 
-        self.project_client = AIProjectClient(
-            endpoint=settings.foundry_project_endpoint,
-            credential=self.credential,
-        )
-
-        self.openai_client = (
-            self.project_client.get_openai_client()
+        self.token_provider = get_bearer_token_provider(
+            self.credential,
+            self.AZURE_COGNITIVE_SERVICES_SCOPE,
         )
 
         # ========================================================
-        # ASYNCHRONOUS CLIENTS
+        # SYNCHRONOUS AZURE OPENAI CLIENT
+        # ========================================================
+
+        self.openai_client = AzureOpenAI(
+            azure_endpoint=(
+                settings.foundry_openai_endpoint
+            ),
+            api_version=self.AZURE_OPENAI_API_VERSION,
+            azure_ad_token_provider=self.token_provider,
+        )
+
+        # ========================================================
+        # ASYNCHRONOUS AZURE CREDENTIAL
         # ========================================================
 
         self.async_credential = (
             AsyncDefaultAzureCredential()
         )
 
-        self.async_project_client = AsyncAIProjectClient(
-            endpoint=settings.foundry_project_endpoint,
-            credential=self.async_credential,
-        )
+        # ========================================================
+        # ASYNCHRONOUS AZURE OPENAI CLIENT
+        # ========================================================
 
-        self.async_openai_client = (
-            self.async_project_client.get_openai_client()
+        # The Azure OpenAI async client performs the network
+        # operation asynchronously. Authentication is handled
+        # through the same Azure AD token provider.
+        self.async_openai_client = AsyncAzureOpenAI(
+            azure_endpoint=(
+                settings.foundry_openai_endpoint
+            ),
+            api_version=self.AZURE_OPENAI_API_VERSION,
+            azure_ad_token_provider=self.token_provider,
         )
 
     # ============================================================
@@ -188,9 +213,6 @@ class MicrosoftFoundryEmbeddingProvider(
                     "match input count for batch."
                 )
 
-            # The API response contains an index for each input.
-            # Sorting ensures the final vector order exactly matches
-            # the original input order.
             ordered_data = sorted(
                 response.data,
                 key=lambda item: item.index,
@@ -227,9 +249,6 @@ class MicrosoftFoundryEmbeddingProvider(
         Generate embeddings asynchronously.
 
         Large input lists are divided into provider-safe batches.
-
-        Each batch is sent through the native asynchronous
-        Microsoft Foundry/OpenAI client.
 
         Batches are processed sequentially to keep provider-side
         request pressure controlled while each individual network
@@ -390,8 +409,7 @@ class MicrosoftFoundryEmbeddingProvider(
         texts: list[str],
     ) -> Any:
         """
-        Send one already-validated batch using the native
-        asynchronous client.
+        Send one already-validated batch asynchronously.
         """
 
         return (
@@ -439,11 +457,12 @@ class MicrosoftFoundryEmbeddingProvider(
 
     def get_dimension(self) -> int:
         """
-        Return the dimensionality of the configured embedding
+        Return the configured dimensionality of the embedding
         model.
 
-        The ContextOps configuration currently uses
-        text-embedding-3-small.
+        text-embedding-3-small returns 1536 dimensions by
+        default because no reduced `dimensions` parameter is
+        supplied to the embedding request.
         """
 
         return 1536
@@ -458,7 +477,7 @@ class MicrosoftFoundryEmbeddingProvider(
         """
 
         try:
-            self.project_client.close()
+            self.openai_client.close()
         finally:
             self.credential.close()
 
@@ -468,6 +487,6 @@ class MicrosoftFoundryEmbeddingProvider(
         """
 
         try:
-            await self.async_project_client.close()
+            await self.async_openai_client.close()
         finally:
             await self.async_credential.close()

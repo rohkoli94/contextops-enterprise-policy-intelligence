@@ -35,6 +35,10 @@ class Settings(BaseSettings):
 
     foundry_project_endpoint: str
 
+    # Resource-level Azure OpenAI endpoint.
+    # Used for direct embedding API calls.
+    foundry_openai_endpoint: str
+
     # LLM
     foundry_model_name: str
     foundry_model_deployment_name: str
