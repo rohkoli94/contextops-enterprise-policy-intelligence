@@ -27,7 +27,7 @@ class QdrantVectorStore(VectorStore):
         custom tenant sharding
             ->
         shared default shard
-            +
+        +
         dedicated tenant shards
             ->
         payload filtering
@@ -273,21 +273,21 @@ class QdrantVectorStore(VectorStore):
             default
             large-bank
             large-insurer
+
+        Qdrant returns a ShardKeysResponse from
+        list_shard_keys(), so the actual shard keys
+        are available through response.shard_keys.
         """
 
-        existing_keys = (
-            self.client.list_shard_keys(
-                collection_name=(
-                    settings.qdrant_collection_name
-                ),
-            )
+        response = self.client.list_shard_keys(
+            collection_name=(
+                settings.qdrant_collection_name
+            ),
         )
 
         existing_key_values = {
-            self._normalize_shard_key(
-                key
-            )
-            for key in existing_keys
+            str(key)
+            for key in response.shard_keys
         }
 
         if shard_key in existing_key_values:
@@ -1193,7 +1193,7 @@ class QdrantVectorStore(VectorStore):
         top_k: int,
     ) -> None:
         """
-        Validate sparse BM25 retrieval inputs.
+        Validate sparse BM25 query inputs.
         """
 
         if not sparse_query.indices:

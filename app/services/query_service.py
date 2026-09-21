@@ -300,3 +300,39 @@ class QueryService:
             )
 
             raise
+
+    async def aclose(self) -> None:
+        """
+        Close all long-lived asynchronous resources owned by
+        the query service.
+
+        Resources are closed in reverse creation order so that
+        dependencies are released safely.
+        """
+
+        for resource in reversed(
+            self.shutdown_resources
+        ):
+            close_method = getattr(
+                resource,
+                "aclose",
+                None,
+            )
+
+            if close_method is None:
+                close_method = getattr(
+                    resource,
+                    "close",
+                    None,
+                )
+
+            if close_method is None:
+                continue
+
+            result = close_method()
+
+            if hasattr(
+                result,
+                "__await__",
+            ):
+                await result

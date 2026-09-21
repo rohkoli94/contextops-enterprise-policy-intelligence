@@ -415,7 +415,7 @@ async def test_query_graph_executes_end_to_end() -> None:
         {
             "query": "What about managers?",
             "tenant_id": "tenant-001",
-            "conversation_id": None,
+            "conversation_id": "conversation-001",
             "filters": None,
             "retry_count": 0,
         }

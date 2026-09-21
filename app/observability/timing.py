@@ -1,21 +1,17 @@
 from collections.abc import Awaitable, Callable
 from time import perf_counter
 from typing import Any
+import logging
 
 from app.rag.workflow.state import QueryState
+
+
+logger = logging.getLogger("contextops.graph")
 
 
 def _get_timings(
     state: QueryState,
 ) -> dict[str, Any]:
-    """
-    Return the existing serializable timing structure.
-
-    Every workflow node receives and returns a state dictionary,
-    so timings are explicitly copied into the returned state
-    instead of relying on an in-memory runtime object.
-    """
-
     existing_timings = state.get(
         "timings"
     )
@@ -61,37 +57,49 @@ def create_timed_node(
     Awaitable[QueryState],
 ]:
     """
-    Wrap an asynchronous LangGraph node and record execution time.
+    Wrap a workflow node with timing and
+    structured lifecycle logging.
 
-    The wrapped node remains responsible for all business logic.
+    The wrapper:
 
-    Timing information is propagated through QueryState so every
-    subsequent node can retain timings recorded by earlier nodes.
-
-    Timing failures never change application behavior.
+    - validates the node name
+    - logs node start
+    - measures execution duration
+    - records successful node duration
+    - records failed node duration
+    - logs node completion
+    - logs node failure
+    - preserves the original exception
     """
 
     if not name or not name.strip():
         raise ValueError(
-            "Timing node name cannot be empty."
+            "Timing node name cannot be empty"
         )
-
-    stage_name = name.strip()
 
     async def timed_node(
         state: QueryState,
     ) -> QueryState:
+
+        if name == "llm_generation":
+            logger.info(
+                "\n"
+                "============================================================\n"
+                "🤖 NODE STARTED: llm_generation\n"
+                "============================================================"
+            )
+        else:
+            logger.info(
+                "▶ NODE STARTED: %s",
+                name,
+            )
+
         started_at = perf_counter()
 
         try:
             result = await node(state)
 
-        except Exception:
-            # -----------------------------------------------
-            # Record timing even when the wrapped node fails.
-            # -----------------------------------------------
-
-            duration_ms = (
+            elapsed_ms = (
                 perf_counter() - started_at
             ) * 1000
 
@@ -99,53 +107,81 @@ def create_timed_node(
                 state
             )
 
-            timings["stages"][
-                stage_name
-            ] = round(
-                duration_ms,
+            timings["stages"][name] = round(
+                elapsed_ms,
                 3,
             )
 
-            # Timing must never mask the original exception.
+            if name == "llm_generation":
+                logger.info(
+                    "\n"
+                    "============================================================\n"
+                    "🤖 NODE COMPLETED: llm_generation\n"
+                    "⏱ duration_ms=%.3f\n"
+                    "============================================================",
+                    elapsed_ms,
+                )
+            else:
+                logger.info(
+                    "✓ NODE COMPLETED: %s | "
+                    "duration_ms=%.3f",
+                    name,
+                    elapsed_ms,
+                )
+
+            return {
+                **result,
+                "timings": timings,
+            }
+
+        except Exception:
+            elapsed_ms = (
+                perf_counter() - started_at
+            ) * 1000
+
+            timings = _get_timings(
+                state
+            )
+
+            timings["stages"][name] = round(
+                elapsed_ms,
+                3,
+            )
+
+            # Update the original state as well.
+            # This is important because the node
+            # raised an exception and therefore
+            # cannot return a new state object.
             state["timings"] = timings
 
+            if name == "llm_generation":
+                logger.exception(
+                    "\n"
+                    "============================================================\n"
+                    "🚨 NODE FAILED: llm_generation\n"
+                    "⏱ duration_ms=%.3f\n"
+                    "============================================================",
+                    elapsed_ms,
+                )
+            else:
+                logger.exception(
+                    "✗ NODE FAILED: %s | "
+                    "duration_ms=%.3f",
+                    name,
+                    elapsed_ms,
+                )
+
             raise
-
-        # ----------------------------------------------------
-        # SUCCESSFUL NODE EXECUTION
-        # ----------------------------------------------------
-
-        duration_ms = (
-            perf_counter() - started_at
-        ) * 1000
-
-        timings = _get_timings(
-            result
-        )
-
-        timings["stages"][
-            stage_name
-        ] = round(
-            duration_ms,
-            3,
-        )
-
-        return {
-            **result,
-            "timings": timings,
-        }
 
     return timed_node
 
 
 def record_total_query_time(
     state: QueryState,
-    duration_ms: float,
+    elapsed_ms: float,
 ) -> QueryState:
     """
-    Record total end-to-end workflow execution time.
-
-    The result remains fully JSON-serializable.
+    Record total workflow execution time.
     """
 
     timings = _get_timings(
@@ -153,7 +189,7 @@ def record_total_query_time(
     )
 
     timings["total_ms"] = round(
-        duration_ms,
+        elapsed_ms,
         3,
     )
 

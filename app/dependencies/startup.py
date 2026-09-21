@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.config.settings import settings
 from app.dependencies.container import (
     create_query_service,
 )
@@ -31,6 +32,7 @@ def initialize_rag() -> None:
         4. Hybrid retriever
         5. Vector store
         6. Qdrant collection
+        7. Qdrant default shard key
     """
 
     # --------------------------------------------------------
@@ -73,6 +75,26 @@ def initialize_rag() -> None:
 
     vector_store.ensure_collection(
         vector_size=vector_size,
+    )
+
+    # --------------------------------------------------------
+    # STEP 7 — DEFAULT QDRANT SHARD KEY
+    # --------------------------------------------------------
+    #
+    # The application uses ShardKeyWithFallback:
+    #
+    #     target   = tenant_id
+    #     fallback = qdrant_default_shard_key
+    #
+    # Therefore the configured default shard must exist
+    # before the first document upsert or retrieval.
+    #
+    # ensure_shard_key() is idempotent:
+    # if the shard already exists, nothing is created.
+    #
+
+    vector_store.ensure_shard_key(
+        settings.qdrant_default_shard_key,
     )
 
 

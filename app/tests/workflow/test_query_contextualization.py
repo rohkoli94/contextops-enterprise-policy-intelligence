@@ -44,6 +44,7 @@ async def test_contextualizes_conversational_query() -> None:
     state = {
         "query": "What about managers?",
         "tenant_id": "tenant-001",
+        "conversation_id": "conversation-001",
         "conversation_summary": (
             "User is asking about employee notice policies."
         ),
@@ -94,6 +95,7 @@ async def test_falls_back_to_original_query_when_rewriter_fails() -> None:
     state = {
         "query": "What about managers?",
         "tenant_id": "tenant-001",
+        "conversation_id": "conversation-001",
         "conversation_summary": None,
         "recent_messages": [],
     }
@@ -137,6 +139,7 @@ async def test_falls_back_when_rewriter_returns_empty_query() -> None:
     state = {
         "query": "What about managers?",
         "tenant_id": "tenant-001",
+        "conversation_id": "conversation-001",
         "conversation_summary": None,
         "recent_messages": [],
     }
