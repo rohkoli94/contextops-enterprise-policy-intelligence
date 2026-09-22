@@ -12,6 +12,10 @@ from app.dependencies.rag import (
     get_vector_store,
 )
 
+from app.providers.llm.factory import (
+    get_llm_provider,
+)
+
 from app.providers.storage.azure_blob import (
     AzureBlobStorageProvider,
 )
@@ -50,6 +54,8 @@ def get_document_service() -> Generator[
             ->
         Storage
             ->
+        LLM Provider
+            ->
         Extractor
             ->
         Chunker
@@ -78,11 +84,21 @@ def get_document_service() -> Generator[
         )
 
         # --------------------------------------------------
+        # LLM PROVIDER
+        # --------------------------------------------------
+
+        llm_provider = (
+            get_llm_provider()
+        )
+
+        # --------------------------------------------------
         # RAG COMPONENTS
         # --------------------------------------------------
 
         extractor = (
-            DoclingDocumentExtractor()
+            DoclingDocumentExtractor(
+                llm_provider=llm_provider,
+            )
         )
 
         chunker = (
@@ -165,6 +181,8 @@ async def get_async_document_service() -> AsyncGenerator[
             ->
         Async-capable Storage
             ->
+        LLM Provider
+            ->
         Extractor
             ->
         Chunker
@@ -197,11 +215,21 @@ async def get_async_document_service() -> AsyncGenerator[
         )
 
         # --------------------------------------------------
+        # LLM PROVIDER
+        # --------------------------------------------------
+
+        llm_provider = (
+            get_llm_provider()
+        )
+
+        # --------------------------------------------------
         # RAG COMPONENTS
         # --------------------------------------------------
 
         extractor = (
-            DoclingDocumentExtractor()
+            DoclingDocumentExtractor(
+                llm_provider=llm_provider,
+            )
         )
 
         chunker = (

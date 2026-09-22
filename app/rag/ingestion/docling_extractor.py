@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from docling.datamodel.base_models import InputFormat
 from docling.document_converter import DocumentConverter
 
 from app.domain.document import Document
@@ -48,6 +49,18 @@ class DoclingDocumentExtractor(DocumentExtractor):
         # Create the Docling converter once and reuse it.
         self.converter = DocumentConverter()
 
+        # IMPORTANT:
+        # Docling can detect PictureItem objects without generating
+        # their actual image payload.
+        #
+        # ContextOps needs the actual image so that it can be passed
+        # to the vision-capable LLM.
+        pdf_format_option = self.converter.format_to_options[
+            InputFormat.PDF
+        ]
+
+        pdf_format_option.pipeline_options.generate_picture_images = True
+
         # The LLM provider is responsible for communicating
         # with the configured vision-capable model.
         self.llm_provider = llm_provider
@@ -57,7 +70,7 @@ class DoclingDocumentExtractor(DocumentExtractor):
         document: Document,
         stream: BinaryIO,
         file_name: str,
-        document_version_id: uuid
+        document_version_id: uuid.UUID,
     ) -> list[DocumentElement]:
         """
         Main document extraction flow.
@@ -89,12 +102,6 @@ class DoclingDocumentExtractor(DocumentExtractor):
             #
             # item  -> actual extracted document content/item
             # level -> hierarchy depth of the item in the document
-            #
-            # Example hierarchy:
-            # Level 0 -> Title
-            # Level 1 -> Section
-            # Level 2 -> Subsection
-            # Level 3 -> Paragraph
             for item, level in result.document.iterate_items():
 
                 # Determine what type of domain DocumentElement
@@ -154,8 +161,8 @@ class DoclingDocumentExtractor(DocumentExtractor):
         """
         Copy the incoming document stream to a temporary file.
 
-        A 1 MB buffer is used so the complete document is not
-        loaded into application memory at once.
+        A 1 MB buffer is used so the complete document is not loaded
+        into application memory at once.
         """
 
         # Preserve the original extension so Docling can identify
@@ -168,10 +175,6 @@ class DoclingDocumentExtractor(DocumentExtractor):
         ) as temp_file:
 
             # Copy the stream incrementally.
-            #
-            # Only approximately 1 MB is read into memory at a time,
-            # instead of loading a potentially large document
-            # completely into RAM.
             shutil.copyfileobj(
                 stream,
                 temp_file,
@@ -199,12 +202,6 @@ class DoclingDocumentExtractor(DocumentExtractor):
             return None
 
         # Docling label may be an Enum or a normal string.
-        #
-        # Example Enum:
-        # ContentType.TEXT.value -> "text"
-        #
-        # Example string:
-        # "text"
         label_value = (
             label.value
             if hasattr(label, "value")
@@ -282,11 +279,12 @@ class DoclingDocumentExtractor(DocumentExtractor):
         file_name: str,
     ) -> DocumentElement | None:
         """
-        Extract a table and convert it into Markdown.
+        Extract a Docling TableItem and convert its TableData
+        grid into Markdown.
 
-        Markdown preserves the row and column structure in a
-        text representation suitable for later chunking,
-        embedding, and retrieval.
+        This implementation intentionally uses TableData.grid
+        because the installed Docling version does not expose
+        export_to_markdown().
         """
 
         data = getattr(item, "data", None)
@@ -294,16 +292,65 @@ class DoclingDocumentExtractor(DocumentExtractor):
         if data is None:
             return None
 
-        export_to_markdown = getattr(
-            data,
-            "export_to_markdown",
-            None,
-        )
+        grid = getattr(data, "grid", None)
 
-        if not callable(export_to_markdown):
+        if not grid:
             return None
 
-        content = export_to_markdown().strip()
+        rows: list[list[str]] = []
+
+        for row in grid:
+            cells: list[str] = []
+
+            for cell in row:
+                cell_text = getattr(cell, "text", "")
+
+                if cell_text is None:
+                    cell_text = ""
+
+                # Escape Markdown pipe characters so cell contents
+                # cannot break the table structure.
+                cell_text = str(cell_text).strip()
+                cell_text = cell_text.replace("|", "\\|")
+
+                cells.append(cell_text)
+
+            rows.append(cells)
+
+        if not rows:
+            return None
+
+        # Determine the maximum number of columns.
+        column_count = max(
+            (len(row) for row in rows),
+            default=0,
+        )
+
+        if column_count == 0:
+            return None
+
+        # Normalize rows to the same column count.
+        for row in rows:
+            while len(row) < column_count:
+                row.append("")
+
+        # First row becomes the Markdown header.
+        header = rows[0]
+
+        markdown_lines = [
+            "| " + " | ".join(header) + " |",
+            "| " + " | ".join(
+                ["---"] * column_count
+            ) + " |",
+        ]
+
+        # Remaining rows become table body.
+        for row in rows[1:]:
+            markdown_lines.append(
+                "| " + " | ".join(row) + " |"
+            )
+
+        content = "\n".join(markdown_lines).strip()
 
         # Skip empty tables.
         if not content:
@@ -317,6 +364,16 @@ class DoclingDocumentExtractor(DocumentExtractor):
 
         # Indicates how the table content is represented.
         metadata["content_format"] = "markdown"
+
+        # Preserve useful table dimensions.
+        num_rows = getattr(data, "num_rows", None)
+        num_cols = getattr(data, "num_cols", None)
+
+        if num_rows is not None:
+            metadata["table_rows"] = num_rows
+
+        if num_cols is not None:
+            metadata["table_columns"] = num_cols
 
         return DocumentElement(
             element_id=str(uuid.uuid4()),
@@ -399,23 +456,10 @@ class DoclingDocumentExtractor(DocumentExtractor):
         metadata["vision_model"] = vision_response.model
         metadata["vision_provider"] = vision_response.provider
 
-        # `visual_type` is a ContentType Enum.
-        #
-        # Examples:
-        # ContentType.IMAGE   -> "image"
-        # ContentType.CHART   -> "chart"
-        # ContentType.DIAGRAM -> "diagram"
-        #
-        # `.value` returns the actual string value of the Enum.
-        # This stores a simple serializable value in metadata
-        # instead of storing the Python Enum object itself.
+        # Store the detected visual type.
         metadata["visual_type"] = visual_type.value
 
         # Store the media type of the image sent to the vision model.
-        #
-        # Examples:
-        # image/png
-        # image/jpeg
         metadata["media_type"] = media_type
 
         return DocumentElement(
@@ -456,11 +500,10 @@ class DoclingDocumentExtractor(DocumentExtractor):
         if image is None:
             return None
 
-        # PIL images do not always retain their original format,
-        # especially when an image was generated/cropped internally.
-        #
-        # Default to PNG when the format is unavailable.
-        image_format = (image.format or "PNG").upper()
+        # PIL images do not always retain their original format.
+        image_format = (
+            getattr(image, "format", None) or "PNG"
+        ).upper()
 
         # Map image formats to MIME/media types.
         media_types = {
@@ -523,6 +566,7 @@ class DoclingDocumentExtractor(DocumentExtractor):
             normalized_line = line.strip()
 
             if normalized_line.upper().startswith("TYPE:"):
+
                 type_value = (
                     normalized_line
                     .split(":", 1)[1]
@@ -565,6 +609,7 @@ class DoclingDocumentExtractor(DocumentExtractor):
         provenance = getattr(item, "prov", None)
 
         if provenance:
+
             page_no = getattr(
                 provenance[0],
                 "page_no",
@@ -590,29 +635,11 @@ class DoclingDocumentExtractor(DocumentExtractor):
 
         metadata: dict[str, Any] = {
             "file_name": file_name,
-
-            # Represents how deeply this item is nested in the
-            # document structure.
-            #
-            # Example:
-            # Level 0 -> Title
-            # Level 1 -> Section
-            # Level 2 -> Subsection
-            # Level 3 -> Paragraph
-            #
-            # Useful later for structure-aware chunking.
             "hierarchy_level": level,
         }
 
         # Document/layout label describing the original type
         # detected by Docling.
-        #
-        # Examples:
-        # text
-        # title
-        # section_header
-        # table
-        # picture
         label = getattr(item, "label", None)
 
         if label is not None:
@@ -631,35 +658,31 @@ class DoclingDocumentExtractor(DocumentExtractor):
             prov_metadata: dict[str, Any] = {}
 
             # Original source page.
-            #
-            # Useful for:
-            # - Citations
-            # - Opening the correct PDF page
-            # - Source navigation
-            page_no = getattr(prov, "page_no", None)
+            page_no = getattr(
+                prov,
+                "page_no",
+                None,
+            )
 
             if page_no is not None:
                 prov_metadata["page_number"] = page_no
 
             # Character range of the content in the source.
-            #
-            # Example:
-            # [120, 250]
-            #
-            # Useful for tracing content back to its original
-            # logical position when available.
-            charspan = getattr(prov, "charspan", None)
+            charspan = getattr(
+                prov,
+                "charspan",
+                None,
+            )
 
             if charspan is not None:
                 prov_metadata["charspan"] = list(charspan)
 
             # Physical location of the element on the page.
-            #
-            # Useful later for:
-            # - Highlighting exact source regions
-            # - Showing citation source areas
-            # - Locating a chart, image, table, or text block
-            bbox = getattr(prov, "bbox", None)
+            bbox = getattr(
+                prov,
+                "bbox",
+                None,
+            )
 
             if bbox is not None:
                 prov_metadata["bbox"] = {
@@ -676,128 +699,3 @@ class DoclingDocumentExtractor(DocumentExtractor):
             metadata["provenance"] = provenance
 
         return metadata
-
-
-# ============================================================
-# ROHIT NOTES — 
-# ============================================================
-
-# 1. What does this extractor do?
-#
-# It receives a document stream, copies it incrementally to temporary
-# disk storage, parses it using Docling, and converts structured
-# content into our DocumentElement domain model.
-#
-# Supported elements:
-# - TEXT
-# - TABLE
-# - Visuals
-
-
-# 2. Visual processing:
-#
-# Docling extracts the visual and its document structure.
-#
-# A vision-capable LLM then understands the semantic meaning of
-# the visual and classifies it as:
-#
-# IMAGE / CHART / DIAGRAM
-#
-# The generated description becomes searchable RAG content.
-
-
-# 3. Full visual flow:
-#
-# PDF
-#   ->
-# Docling
-#   ->
-# PictureItem
-#   ->
-# item.get_image(docling_document)
-#   ->
-# PIL Image
-#   ->
-# Image bytes + dynamic media type
-#   ->
-# VisionRequest
-#   ->
-# LLMProvider.generate_vision()
-#   ->
-# MicrosoftFoundryProvider
-#   ->
-# Vision-capable model
-#   ->
-# IMAGE / CHART / DIAGRAM + description
-#   ->
-# DocumentElement
-
-
-# 4. Why image bytes instead of image URL?
-#
-# The ingestion layer extracts the actual visual from the document
-# and passes it through the provider abstraction.
-#
-# The provider decides how to transform the bytes into the format
-# required by the underlying LLM API.
-
-
-# 5. Technical challenge:
-#
-# Large documents, potentially up to 1 GB, should not be loaded
-# completely into application memory during ingestion.
-
-
-# 6. Current solution:
-#
-# The storage stream is copied to a temporary file using a 1 MB
-# buffer, so only a small portion is held in RAM at a time.
-
-
-# 7. Area of improvement:
-#
-# The complete document is temporarily stored on disk.
-#
-# Using BytesIO could avoid temporary disk storage, but a 1 GB
-# document could require approximately 1 GB of RAM, which is not
-# suitable for large-scale ingestion.
-
-
-# 8. Vision response improvement:
-#
-# The current vision response is parsed from text:
-#
-# TYPE: CHART
-# DESCRIPTION: ...
-#
-# A more production-ready approach would use structured JSON output
-# and schema validation, for example:
-#
-# {
-#     "type": "chart",
-#     "description": "Bar chart showing revenue growth..."
-# }
-
-
-# 9. Scalability improvement:
-#
-# Move ingestion to asynchronous background workers.
-#
-# API:
-# Upload -> Create ingestion job -> Return immediately
-#
-# Worker:
-# Download
-#   ->
-# Docling Extraction
-#   ->
-# Vision Analysis
-#   ->
-# Chunking
-#   ->
-# Embedding
-#   ->
-# Vector DB
-#
-# This keeps the FastAPI request responsive and allows document
-# extraction and vision processing workers to scale independently.
