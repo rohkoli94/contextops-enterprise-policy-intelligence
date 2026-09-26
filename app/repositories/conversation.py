@@ -29,16 +29,6 @@ class ConversationRepository:
     are NOT shared.
 
     A new AsyncSession is created for each repository operation.
-
-    Responsibilities:
-        - persist full conversation history
-        - retrieve bounded recent messages
-        - retrieve latest rolling summary
-        - create/update rolling summaries
-        - enforce tenant isolation
-
-    Transaction ownership remains at the repository operation
-    boundary for the current implementation.
     """
 
     def __init__(
@@ -56,11 +46,9 @@ class ConversationRepository:
         conversation_id: UUID,
         tenant_id: str,
     ) -> Conversation | None:
-        """
-        Retrieve a conversation while enforcing tenant isolation.
-        """
 
         async with self.session_factory() as db:
+
             statement = (
                 select(Conversation)
                 .where(
@@ -71,7 +59,9 @@ class ConversationRepository:
                 )
             )
 
-            result = await db.execute(statement)
+            result = await db.execute(
+                statement
+            )
 
             return result.scalar_one_or_none()
 
@@ -79,21 +69,31 @@ class ConversationRepository:
         self,
         tenant_id: str,
         title: str | None = None,
+        conversation_id: UUID | None = None,
     ) -> Conversation:
-        """
-        Create and persist a new conversation.
-        """
 
         async with self.session_factory() as db:
+
+            conversation_kwargs = {
+                "tenant_id": tenant_id,
+                "title": title,
+            }
+
+            if conversation_id is not None:
+                conversation_kwargs[
+                    "conversation_id"
+                ] = conversation_id
+
             conversation = Conversation(
-                tenant_id=tenant_id,
-                title=title,
+                **conversation_kwargs,
             )
 
             db.add(conversation)
 
             await db.commit()
-            await db.refresh(conversation)
+            await db.refresh(
+                conversation
+            )
 
             return conversation
 
@@ -107,17 +107,6 @@ class ConversationRepository:
         tenant_id: str,
         limit: int,
     ) -> list[ConversationMessage]:
-        """
-        Retrieve the latest N messages.
-
-        Tenant isolation is enforced through the parent
-        conversation.
-
-        Results are returned chronologically:
-            oldest recent message
-                ->
-            newest recent message
-        """
 
         if limit < 0:
             raise ValueError(
@@ -129,12 +118,10 @@ class ConversationRepository:
 
         async with self.session_factory() as db:
 
-            # ------------------------------------------------
-            # Verify tenant ownership
-            # ------------------------------------------------
-
             conversation_statement = (
-                select(Conversation.conversation_id)
+                select(
+                    Conversation.conversation_id
+                )
                 .where(
                     Conversation.conversation_id
                     == conversation_id,
@@ -143,8 +130,10 @@ class ConversationRepository:
                 )
             )
 
-            conversation_result = await db.execute(
-                conversation_statement
+            conversation_result = (
+                await db.execute(
+                    conversation_statement
+                )
             )
 
             conversation_exists = (
@@ -155,12 +144,10 @@ class ConversationRepository:
             if not conversation_exists:
                 return []
 
-            # ------------------------------------------------
-            # Retrieve newest N messages
-            # ------------------------------------------------
-
             statement = (
-                select(ConversationMessageModel)
+                select(
+                    ConversationMessageModel
+                )
                 .where(
                     ConversationMessageModel.conversation_id
                     == conversation_id
@@ -171,19 +158,13 @@ class ConversationRepository:
                 .limit(limit)
             )
 
-            result = await db.execute(statement)
+            result = await db.execute(
+                statement
+            )
 
             rows = list(
                 result.scalars().all()
             )
-
-            # Database order:
-            #
-            # newest -> oldest
-            #
-            # Workflow order:
-            #
-            # oldest -> newest
 
             rows.reverse()
 
@@ -197,11 +178,6 @@ class ConversationRepository:
         message: ConversationMessage,
         tenant_id: str,
     ) -> ConversationMessage:
-        """
-        Persist one conversation message.
-
-        The parent conversation must belong to the tenant.
-        """
 
         conversation_id = UUID(
             message.conversation_id
@@ -209,12 +185,10 @@ class ConversationRepository:
 
         async with self.session_factory() as db:
 
-            # ------------------------------------------------
-            # Tenant isolation
-            # ------------------------------------------------
-
             conversation_statement = (
-                select(Conversation.conversation_id)
+                select(
+                    Conversation.conversation_id
+                )
                 .where(
                     Conversation.conversation_id
                     == conversation_id,
@@ -223,8 +197,10 @@ class ConversationRepository:
                 )
             )
 
-            conversation_result = await db.execute(
-                conversation_statement
+            conversation_result = (
+                await db.execute(
+                    conversation_statement
+                )
             )
 
             conversation_exists = (
@@ -238,21 +214,22 @@ class ConversationRepository:
                     "does not belong to the tenant."
                 )
 
-            # ------------------------------------------------
-            # Persist message
-            # ------------------------------------------------
-
-            message_model = ConversationMessageModel(
-                conversation_id=conversation_id,
-                role=message.role.value,
-                content=message.content,
-                created_at=message.created_at,
+            message_model = (
+                ConversationMessageModel(
+                    conversation_id=conversation_id,
+                    role=message.role.value,
+                    content=message.content,
+                    created_at=message.created_at,
+                )
             )
 
             db.add(message_model)
 
             await db.commit()
-            await db.refresh(message_model)
+
+            await db.refresh(
+                message_model
+            )
 
             return self._to_domain_message(
                 message_model
@@ -267,18 +244,13 @@ class ConversationRepository:
         conversation_id: UUID,
         tenant_id: str,
     ) -> str | None:
-        """
-        Retrieve the current rolling summary for a conversation.
-        """
 
         async with self.session_factory() as db:
 
-            # ------------------------------------------------
-            # Tenant isolation
-            # ------------------------------------------------
-
             conversation_statement = (
-                select(Conversation.conversation_id)
+                select(
+                    Conversation.conversation_id
+                )
                 .where(
                     Conversation.conversation_id
                     == conversation_id,
@@ -287,8 +259,10 @@ class ConversationRepository:
                 )
             )
 
-            conversation_result = await db.execute(
-                conversation_statement
+            conversation_result = (
+                await db.execute(
+                    conversation_statement
+                )
             )
 
             conversation_exists = (
@@ -299,12 +273,10 @@ class ConversationRepository:
             if not conversation_exists:
                 return None
 
-            # ------------------------------------------------
-            # Latest summary
-            # ------------------------------------------------
-
             statement = (
-                select(ConversationSummary)
+                select(
+                    ConversationSummary
+                )
                 .where(
                     ConversationSummary.conversation_id
                     == conversation_id
@@ -316,9 +288,13 @@ class ConversationRepository:
                 .limit(1)
             )
 
-            result = await db.execute(statement)
+            result = await db.execute(
+                statement
+            )
 
-            summary = result.scalar_one_or_none()
+            summary = (
+                result.scalar_one_or_none()
+            )
 
             if summary is None:
                 return None
@@ -332,20 +308,13 @@ class ConversationRepository:
         summary: str,
         message_boundary: int,
     ) -> None:
-        """
-        Create the first rolling summary or update the current one.
-
-        Only the latest summary is maintained.
-        """
 
         async with self.session_factory() as db:
 
-            # ------------------------------------------------
-            # Tenant isolation
-            # ------------------------------------------------
-
             conversation_statement = (
-                select(Conversation.conversation_id)
+                select(
+                    Conversation.conversation_id
+                )
                 .where(
                     Conversation.conversation_id
                     == conversation_id,
@@ -354,8 +323,10 @@ class ConversationRepository:
                 )
             )
 
-            conversation_result = await db.execute(
-                conversation_statement
+            conversation_result = (
+                await db.execute(
+                    conversation_statement
+                )
             )
 
             conversation_exists = (
@@ -369,12 +340,10 @@ class ConversationRepository:
                     "does not belong to the tenant."
                 )
 
-            # ------------------------------------------------
-            # Find existing summary
-            # ------------------------------------------------
-
             statement = (
-                select(ConversationSummary)
+                select(
+                    ConversationSummary
+                )
                 .where(
                     ConversationSummary.conversation_id
                     == conversation_id
@@ -386,16 +355,22 @@ class ConversationRepository:
                 .limit(1)
             )
 
-            result = await db.execute(statement)
+            result = await db.execute(
+                statement
+            )
 
-            existing = result.scalar_one_or_none()
+            existing = (
+                result.scalar_one_or_none()
+            )
 
             if existing is None:
 
-                summary_model = ConversationSummary(
-                    conversation_id=conversation_id,
-                    summary=summary,
-                    message_boundary=message_boundary,
+                summary_model = (
+                    ConversationSummary(
+                        conversation_id=conversation_id,
+                        summary=summary,
+                        message_boundary=message_boundary,
+                    )
                 )
 
                 db.add(summary_model)
@@ -419,26 +394,20 @@ class ConversationRepository:
         tenant_id: str,
         recent_message_limit: int,
     ) -> ConversationContext:
-        """
-        Retrieve bounded conversation context.
 
-        Returns:
-            recent messages
-            +
-            latest rolling summary
-
-        Full conversation history is never returned by this method.
-        """
-
-        messages = await self.get_recent_messages(
-            conversation_id=conversation_id,
-            tenant_id=tenant_id,
-            limit=recent_message_limit,
+        messages = (
+            await self.get_recent_messages(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                limit=recent_message_limit,
+            )
         )
 
-        summary = await self.get_latest_summary(
-            conversation_id=conversation_id,
-            tenant_id=tenant_id,
+        summary = (
+            await self.get_latest_summary(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+            )
         )
 
         return ConversationContext(
@@ -454,9 +423,6 @@ class ConversationRepository:
     def _to_domain_message(
         message: ConversationMessageModel,
     ) -> ConversationMessage:
-        """
-        Convert SQLAlchemy model into domain model.
-        """
 
         return ConversationMessage(
             message_id=str(

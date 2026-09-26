@@ -133,15 +133,12 @@ class Settings(BaseSettings):
     redis_cache_ttl_seconds: int = 300
     redis_cache_key_prefix: str = "contextops:cache:"
 
-    # ========================================================
-    # LANGSMITH
-    # ========================================================
-
-    langsmith_tracing: bool = False
-    langsmith_api_key: str | None = None
-    langsmith_project: str = "contextops"
-    langsmith_endpoint: str = "https://api.smith.langchain.com"
-    langsmith_workspace_id: str | None = None
+    # LANGFUSE
+    langfuse_tracing: bool = False
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+    langfuse_tracing_environment: str = "development"
 
     # ========================================================
     # PYDANTIC SETTINGS

@@ -36,20 +36,6 @@ async def query_policy(
 ) -> QueryResponse:
     """
     Execute an enterprise policy query.
-
-    Flow:
-
-        HTTP Request
-            ↓
-        FastAPI Dependency
-            ↓
-        app.state.query_service
-            ↓
-        QueryService
-            ↓
-        LangGraph
-            ↓
-        QueryResponse
     """
 
     logger.info(
@@ -62,10 +48,15 @@ async def query_policy(
         conversation_id=request.conversation_id,
         filters=request.filters,
     )
+   
+
 
     return QueryResponse(
         answer=result["answer"],
         status="success",
+        conversation_id=result.get(
+            "conversation_id",
+        ),
         citations=result.get(
             "citations",
             [],
@@ -75,3 +66,25 @@ async def query_policy(
             {},
         ),
     )
+
+
+# logger.info("") 
+# logger.info("Query service result: %s",result) 
+# logger.info("") 
+
+#  logger.info(
+#         "Query service result: %s",
+#         result,
+#     )
+
+#     logger.info("---------------")
+
+#     logger.info(
+#     "Query completed successfully | "
+#     "conversation_id=%s | "
+#     "citations=%d | "
+#     "answer=%s",
+#     result.get("conversation_id"),
+#     len(result.get("citations", [])),
+#     result.get("answer"),
+#     ) 

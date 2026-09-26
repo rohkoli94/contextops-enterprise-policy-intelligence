@@ -10,8 +10,8 @@ from app.dependencies.rag import (
     get_sparse_embedding_provider,
     get_vector_store,
 )
-from app.observability.langsmith import (
-    configure_langsmith,
+from app.observability.langfuse import (
+    configure_langfuse,
 )
 
 
@@ -116,16 +116,11 @@ def initialize_application(
     """
 
     # --------------------------------------------------------
-    # STEP 1 — LANGSMITH TRACING
+    # STEP 1 — LANGFUSE TRACING
     # --------------------------------------------------------
     #
-    # Configure LangSmith before creating the query graph.
-    #
-    # LangGraph/LangChain can then automatically emit traces
-    # for query executions when tracing is enabled.
-    #
 
-    configure_langsmith()
+    configure_langfuse()
 
     # --------------------------------------------------------
     # STEP 2 — RAG INFRASTRUCTURE

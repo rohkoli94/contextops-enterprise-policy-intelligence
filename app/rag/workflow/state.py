@@ -158,7 +158,7 @@ class QueryState(TypedDict, total=False):
     #     "total_ms": 1012.772,
     # }
     # ==========================================
-    langsmith_run_id: str | None
+    langfuse_trace_id: str | None
     timings: dict[str, Any]
 
     # ==========================================

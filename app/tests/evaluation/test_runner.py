@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 
 from app.evaluation.llm_judge import (
     LLMJudgeResult,
@@ -47,7 +47,7 @@ class FakeQueryService:
             "context_compressed": True,
             "grounding_reason": "Supported.",
             "retrieval_reason": "Strong evidence.",
-            "langsmith_run_id": "run-123",
+            "langfuse_trace_id": "run-123",
             "timings": {
                 "stages": {
                     "retrieval": 20.5,
@@ -124,7 +124,7 @@ async def test_runner_without_judge() -> None:
     assert result.latency_ms == 200.0
 
     assert result.metadata[
-        "langsmith_run_id"
+        "langfuse_trace_id"
     ] == "run-123"
 
     assert result.judge_evaluation is None

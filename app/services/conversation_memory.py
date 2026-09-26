@@ -5,7 +5,9 @@ from app.domain.conversation import (
     ConversationContext,
     ConversationMessage,
 )
-from app.repositories.conversation import ConversationRepository
+from app.repositories.conversation import (
+    ConversationRepository,
+)
 
 
 class ConversationMemory(ABC):
@@ -19,10 +21,22 @@ class ConversationMemory(ABC):
         rolling summary
               +
         recent N messages
-
-    The implementation must never expose unlimited conversation
-    history to the LLM workflow.
     """
+
+    @abstractmethod
+    async def ensure_conversation(
+        self,
+        conversation_id: str,
+        tenant_id: str,
+        title: str | None = None,
+    ) -> str:
+        """
+        Ensure a conversation exists for the tenant.
+
+        Creates it when it does not already exist.
+        Returns the conversation ID.
+        """
+        raise NotImplementedError
 
     @abstractmethod
     async def get_context(
@@ -65,14 +79,6 @@ class ConversationMemory(ABC):
 class PostgresConversationMemory(ConversationMemory):
     """
     PostgreSQL-backed ConversationMemory implementation.
-
-    Responsibilities:
-        - validate application inputs
-        - enforce bounded conversation context
-        - enforce tenant identity at the service boundary
-        - delegate persistence to ConversationRepository
-
-    Database/session lifecycle is owned by the repository.
     """
 
     def __init__(
@@ -80,6 +86,57 @@ class PostgresConversationMemory(ConversationMemory):
         repository: ConversationRepository,
     ) -> None:
         self.repository = repository
+
+    # ========================================================
+    # CONVERSATION
+    # ========================================================
+
+    async def ensure_conversation(
+        self,
+        conversation_id: str,
+        tenant_id: str,
+        title: str | None = None,
+    ) -> str:
+        if not conversation_id or not conversation_id.strip():
+            raise ValueError(
+                "conversation_id cannot be empty."
+            )
+
+        if not tenant_id or not tenant_id.strip():
+            raise ValueError(
+                "tenant_id cannot be empty."
+            )
+
+        try:
+            conversation_uuid = UUID(
+                conversation_id.strip()
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "conversation_id must be a valid UUID."
+            ) from exc
+
+        existing = await self.repository.get_conversation(
+            conversation_id=conversation_uuid,
+            tenant_id=tenant_id.strip(),
+        )
+
+        if existing is not None:
+            return str(
+                existing.conversation_id
+            )
+
+        conversation = (
+            await self.repository.create_conversation(
+                tenant_id=tenant_id.strip(),
+                title=title,
+                conversation_id=conversation_uuid,
+            )
+        )
+
+        return str(
+            conversation.conversation_id
+        )
 
     # ========================================================
     # CONTEXT
@@ -92,10 +149,6 @@ class PostgresConversationMemory(ConversationMemory):
         *,
         recent_message_limit: int,
     ) -> ConversationContext:
-        """
-        Retrieve only the bounded conversation context needed
-        by the query workflow.
-        """
 
         if not conversation_id or not conversation_id.strip():
             raise ValueError(
@@ -136,9 +189,6 @@ class PostgresConversationMemory(ConversationMemory):
         message: ConversationMessage,
         tenant_id: str,
     ) -> ConversationMessage:
-        """
-        Persist a conversation message.
-        """
 
         if not tenant_id or not tenant_id.strip():
             raise ValueError(
@@ -173,9 +223,6 @@ class PostgresConversationMemory(ConversationMemory):
         summary: str,
         message_boundary: int,
     ) -> None:
-        """
-        Persist/update the rolling conversation summary.
-        """
 
         if not conversation_id or not conversation_id.strip():
             raise ValueError(

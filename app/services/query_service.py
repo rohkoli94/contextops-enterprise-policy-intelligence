@@ -1,52 +1,72 @@
 import logging
+from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from app.api.v1.query.schemas.query_filter import QueryFilter
+from langfuse import get_client, propagate_attributes
+from langfuse.langchain import CallbackHandler
+
+from app.api.v1.query.schemas.query_filter import (
+    QueryFilter,
+)
 from app.config.settings import settings
-from app.observability.timing import record_total_query_time
+from app.domain.conversation import (
+    ConversationMessage,
+    ConversationRole,
+)
+from app.observability.timing import (
+    record_total_query_time,
+)
+from app.providers.llm.base import (
+    LLMProvider,
+    LLMRequest,
+)
 from app.rag.workflow.state import QueryState
+from app.services.conversation_memory import (
+    ConversationMemory,
+)
 
 
-logger = logging.getLogger("contextops.query")
+logger = logging.getLogger(
+    "contextops.query"
+)
 
 
 class QueryService:
     """
-    Application service responsible for executing ContextOps
-    query workflows.
+    Application service responsible for executing
+    ContextOps query workflows.
 
     Responsibilities:
 
-        - validate request-level inputs
-        - normalize query inputs
-        - construct initial QueryState
-        - create a trace/run ID
-        - invoke the compiled LangGraph
-        - pass LangSmith trace metadata
-        - record total query duration
+        - validate request inputs
+        - create/maintain conversations
+        - persist user messages
+        - execute LangGraph
+        - persist assistant messages
+        - update rolling conversation summaries
+        - record query duration
         - emit structured query logs
     """
 
     def __init__(
         self,
         query_graph: Any,
+        conversation_memory: ConversationMemory,
+        llm_provider: LLMProvider,
         shutdown_resources: list[Any] | None = None,
     ) -> None:
-        """
-        Initialize the query service.
-
-        Args:
-            query_graph:
-                Compiled LangGraph used to execute queries.
-
-            shutdown_resources:
-                Long-lived resources that must be closed during
-                application shutdown.
-        """
 
         self.query_graph = query_graph
+
+        self.conversation_memory = (
+            conversation_memory
+        )
+
+        self.llm_provider = (
+            llm_provider
+        )
 
         self.shutdown_resources = (
             shutdown_resources
@@ -63,15 +83,19 @@ class QueryService:
         filters: QueryFilter | None = None,
     ) -> QueryState:
         """
-        Execute a ContextOps query.
+        Execute a complete ContextOps query.
 
-        A unique run ID is generated for every query and passed
-        to LangGraph so the entire workflow can be associated
-        with one LangSmith root trace.
+        Conversation lifecycle:
+
+            1. ensure conversation
+            2. save user message
+            3. execute LangGraph
+            4. save assistant message
+            5. update rolling summary
         """
 
         # =====================================================
-        # STEP 1 — INPUT VALIDATION
+        # STEP 1 â€” INPUT VALIDATION
         # =====================================================
 
         if not isinstance(question, str):
@@ -95,7 +119,7 @@ class QueryService:
             )
 
         # =====================================================
-        # STEP 2 — NORMALIZE INPUTS
+        # STEP 2 â€” NORMALIZE
         # =====================================================
 
         normalized_question = (
@@ -107,7 +131,58 @@ class QueryService:
         )
 
         # =====================================================
-        # STEP 3 — NORMALIZE RETRIEVAL FILTERS
+        # STEP 3 â€” CONVERSATION
+        # =====================================================
+
+        if conversation_id:
+            normalized_conversation_id = (
+                conversation_id.strip()
+            )
+
+        else:
+            normalized_conversation_id = str(
+                uuid4()
+            )
+
+        normalized_conversation_id = (
+            await self.conversation_memory.ensure_conversation(
+                conversation_id=(
+                    normalized_conversation_id
+                ),
+                tenant_id=(
+                    normalized_tenant_id
+                ),
+                title=(
+                    normalized_question[:100]
+                ),
+            )
+        )
+
+        # =====================================================
+        # STEP 4 â€” SAVE USER MESSAGE
+        # =====================================================
+
+        user_message = ConversationMessage(
+            message_id=str(
+                uuid4()
+            ),
+            conversation_id=(
+                normalized_conversation_id
+            ),
+            role=ConversationRole.USER,
+            content=normalized_question,
+            created_at=datetime.now(
+                timezone.utc
+            ),
+        )
+
+        await self.conversation_memory.save_message(
+            message=user_message,
+            tenant_id=normalized_tenant_id,
+        )
+
+        # =====================================================
+        # STEP 5 â€” NORMALIZE FILTERS
         # =====================================================
 
         retrieval_filters = (
@@ -119,19 +194,35 @@ class QueryService:
         )
 
         # =====================================================
-        # STEP 4 — CREATE TRACE RUN ID
+        # STEP 6 â€” TRACE ID
         # =====================================================
 
         trace_run_id = uuid4()
 
+        langfuse_trace_id = None
+        langfuse_handler = None
+
+        if (
+            settings.langfuse_tracing
+            and settings.langfuse_public_key
+            and settings.langfuse_secret_key
+        ):
+            langfuse = get_client()
+            langfuse_trace_id = langfuse.create_trace_id(
+                seed=str(trace_run_id)
+            )
+            langfuse_handler = CallbackHandler()
+
         # =====================================================
-        # STEP 5 — INITIAL WORKFLOW STATE
+        # STEP 7 â€” INITIAL STATE
         # =====================================================
 
         initial_state: QueryState = {
             "query": normalized_question,
             "tenant_id": normalized_tenant_id,
-            "conversation_id": conversation_id,
+            "conversation_id": (
+                normalized_conversation_id
+            ),
             "filters": retrieval_filters,
             "retry_count": 0,
             "timings": {
@@ -141,7 +232,7 @@ class QueryService:
         }
 
         # =====================================================
-        # STEP 6 — LANGSMITH TRACE TAGS
+        # STEP 8 â€” LANGFUSE
         # =====================================================
 
         trace_tags = [
@@ -151,15 +242,13 @@ class QueryService:
             settings.environment,
         ]
 
-        # =====================================================
-        # STEP 7 — LANGSMITH TRACE METADATA
-        # =====================================================
-
         trace_metadata: dict[str, Any] = {
             "application": "contextops",
             "environment": settings.environment,
             "tenant_id": normalized_tenant_id,
-            "conversation_id": conversation_id,
+            "conversation_id": (
+                normalized_conversation_id
+            ),
         }
 
         started_at = perf_counter()
@@ -169,25 +258,59 @@ class QueryService:
         }
 
         try:
-            # =================================================
-            # STEP 8 — INVOKE LANGGRAPH
-            # =================================================
-            #
-            # Explicit run_id makes this invocation the root
-            # trace associated with this query.
-            #
-
-            result = await self.query_graph.ainvoke(
-                initial_state,
-                config={
-                    "run_id": trace_run_id,
-                    "tags": trace_tags,
-                    "metadata": trace_metadata,
-                },
-            )
 
             # =================================================
-            # STEP 9 — RECORD TOTAL QUERY TIME
+            # STEP 9 â€” LANGGRAPH
+            # =================================================
+
+            if langfuse_handler is not None:
+                langfuse = get_client()
+                with langfuse.start_as_current_observation(
+                    as_type="span",
+                    name="contextops-query",
+                    trace_context={
+                        "trace_id": langfuse_trace_id,
+                    },
+                    input={
+                        "query": normalized_question,
+                    },
+                ) as root_span:
+                    with propagate_attributes(
+                        trace_name="contextops-query",
+                        session_id=normalized_conversation_id,
+                        tags=trace_tags,
+                        metadata=trace_metadata,
+                        environment=settings.environment,
+                    ):
+                        result = await self.query_graph.ainvoke(
+                            initial_state,
+                            config={
+                                "callbacks": [langfuse_handler],
+                                "tags": trace_tags,
+                                "metadata": trace_metadata,
+                            },
+                        )
+
+                    root_span.update(
+                        output={
+                            "answer": result.get("answer", ""),
+                            "grounding_status": result.get(
+                                "grounding_status"
+                            ),
+                        }
+                    )
+
+            else:
+                result = await self.query_graph.ainvoke(
+                    initial_state,
+                    config={
+                        "tags": trace_tags,
+                        "metadata": trace_metadata,
+                    },
+                )
+
+            # =================================================
+            # STEP 10 â€” TOTAL TIME
             # =================================================
 
             duration_ms = (
@@ -200,20 +323,70 @@ class QueryService:
             )
 
             # =================================================
-            # STEP 10 — EXPOSE TRACE RUN ID
+            # STEP 11 â€” TRACE ID
             # =================================================
-            #
-            # Keep the trace identifier available to evaluation
-            # and observability consumers without putting the
-            # raw query into custom metadata.
-            #
 
             result = {
                 **result,
-                "langsmith_run_id": str(
-                    trace_run_id
+                "conversation_id": (
+                    normalized_conversation_id
                 ),
+                "langfuse_trace_id": langfuse_trace_id,
             }
+
+            # =================================================
+            # STEP 12 â€” SAVE ASSISTANT MESSAGE
+            # =================================================
+
+            answer = str(
+                result.get(
+                    "answer",
+                    "",
+                )
+            ).strip()
+
+            if answer:
+
+                assistant_message = (
+                    ConversationMessage(
+                        message_id=str(
+                            uuid4()
+                        ),
+                        conversation_id=(
+                            normalized_conversation_id
+                        ),
+                        role=(
+                            ConversationRole.ASSISTANT
+                        ),
+                        content=answer,
+                        created_at=datetime.now(
+                            timezone.utc
+                        ),
+                    )
+                )
+
+                await (
+                    self.conversation_memory
+                    .save_message(
+                        message=assistant_message,
+                        tenant_id=(
+                            normalized_tenant_id
+                        ),
+                    )
+                )
+
+                # =============================================
+                # STEP 13 â€” UPDATE SUMMARY
+                # =============================================
+
+                await self._update_conversation_summary(
+                    conversation_id=(
+                        normalized_conversation_id
+                    ),
+                    tenant_id=(
+                        normalized_tenant_id
+                    ),
+                )
 
             timings = result.get(
                 "timings",
@@ -221,17 +394,19 @@ class QueryService:
             )
 
             # =================================================
-            # STEP 11 — STRUCTURED QUERY LOGGING
+            # STEP 14 â€” LOGGING
             # =================================================
 
             logger.info(
                 "ContextOps query completed",
                 extra={
-                    "tenant_id": normalized_tenant_id,
-                    "conversation_id": conversation_id,
-                    "langsmith_run_id": str(
-                        trace_run_id
+                    "tenant_id": (
+                        normalized_tenant_id
                     ),
+                    "conversation_id": (
+                        normalized_conversation_id
+                    ),
+                    "langfuse_trace_id": langfuse_trace_id,
                     "cache_hit": result.get(
                         "cache_hit",
                         False,
@@ -272,26 +447,21 @@ class QueryService:
             return result
 
         except Exception:
-            # =================================================
-            # ERROR TIMING
-            # =================================================
 
             duration_ms = (
                 perf_counter() - started_at
             ) * 1000
 
-            # =================================================
-            # STRUCTURED ERROR LOGGING
-            # =================================================
-
             logger.exception(
                 "ContextOps query failed",
                 extra={
-                    "tenant_id": normalized_tenant_id,
-                    "conversation_id": conversation_id,
-                    "langsmith_run_id": str(
-                        trace_run_id
+                    "tenant_id": (
+                        normalized_tenant_id
                     ),
+                    "conversation_id": (
+                        normalized_conversation_id
+                    ),
+                    "langfuse_trace_id": langfuse_trace_id,
                     "total_ms": round(
                         duration_ms,
                         3,
@@ -301,13 +471,136 @@ class QueryService:
 
             raise
 
+    async def _update_conversation_summary(
+        self,
+        *,
+        conversation_id: str,
+        tenant_id: str,
+    ) -> None:
+        """
+        Generate and persist the rolling conversation summary.
+
+        The summary is deliberately bounded around:
+
+            existing summary
+            +
+            recent conversation messages
+
+        so the summarization prompt does not grow
+        indefinitely.
+        """
+
+        try:
+
+            context = (
+                await self.conversation_memory
+                .get_context(
+                    conversation_id=conversation_id,
+                    tenant_id=tenant_id,
+                    recent_message_limit=(
+                        settings.conversation_recent_message_limit
+                    ),
+                )
+            )
+
+            existing_summary = (
+                context.summary
+                or "No previous summary exists."
+            )
+
+            recent_lines = []
+
+            for message in (
+                context.recent_messages
+            ):
+                recent_lines.append(
+                    f"{message.role.value}: "
+                    f"{message.content}"
+                )
+
+            recent_context = (
+                "\n".join(recent_lines)
+                if recent_lines
+                else "No recent messages."
+            )
+
+            system_prompt = """
+You maintain a concise rolling summary for an enterprise
+policy assistant conversation.
+
+Summarize only the conversation context provided.
+
+Preserve:
+- the main policy/document topic
+- important entities and subjects
+- user intent
+- important facts explicitly discussed
+- unresolved questions or follow-ups
+
+Do not invent information.
+
+Do not answer the user's question.
+
+Return only the updated summary.
+
+Keep the summary concise and suitable for future
+query contextualization.
+""".strip()
+
+            user_prompt = f"""
+Existing conversation summary:
+{existing_summary}
+
+Recent conversation:
+{recent_context}
+
+Updated conversation summary:
+""".strip()
+
+            response = await (
+                self.llm_provider.agenerate(
+                    LLMRequest(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                    )
+                )
+            )
+
+            summary = (
+                response.content.strip()
+            )
+
+            if not summary:
+                return
+
+            await (
+                self.conversation_memory
+                .update_summary(
+                    conversation_id=conversation_id,
+                    tenant_id=tenant_id,
+                    summary=summary,
+                    message_boundary=len(
+                        context.recent_messages
+                    ),
+                )
+            )
+
+        except Exception:
+            # Summary persistence must not make a successful
+            # user query fail.
+            logger.exception(
+                "Failed to update conversation summary",
+                extra={
+                    "conversation_id": (
+                        conversation_id
+                    ),
+                    "tenant_id": tenant_id,
+                },
+            )
+
     async def aclose(self) -> None:
         """
-        Close all long-lived asynchronous resources owned by
-        the query service.
-
-        Resources are closed in reverse creation order so that
-        dependencies are released safely.
+        Close long-lived asynchronous resources.
         """
 
         for resource in reversed(
@@ -319,20 +612,39 @@ class QueryService:
                 None,
             )
 
-            if close_method is None:
-                close_method = getattr(
-                    resource,
-                    "close",
-                    None,
-                )
+            if close_method is not None:
+                try:
+                    await close_method()
 
-            if close_method is None:
+                except Exception:
+                    logger.exception(
+                        "Failed to close application "
+                        "resource: %r",
+                        resource,
+                    )
                 continue
 
-            result = close_method()
+            close_method = getattr(
+                resource,
+                "close",
+                None,
+            )
 
-            if hasattr(
-                result,
-                "__await__",
-            ):
-                await result
+            if close_method is not None:
+
+                try:
+                    result = close_method()
+
+                    if hasattr(
+                        result,
+                        "__await__",
+                    ):
+                        await result
+
+                except Exception:
+                    logger.exception(
+                        "Failed to close application "
+                        "resource: %r",
+                        resource,
+                    )
+

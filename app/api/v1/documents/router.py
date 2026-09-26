@@ -10,14 +10,15 @@ from fastapi import (
     UploadFile,
 )
 
+from app.api.v1.documents.schemas.document_list_response import (
+    DocumentListResponse,
+)
 from app.api.v1.documents.schemas.document_upload_response import (
     DocumentUploadResponse,
 )
-
 from app.dependencies.document import (
     get_async_document_service,
 )
-
 from app.services.document_service import (
     DocumentService,
 )
@@ -28,6 +29,32 @@ router = APIRouter(
     tags=["Documents"],
 )
 
+
+# ============================================================
+# ACTIVE DOCUMENTS
+# ============================================================
+
+@router.get(
+    "",
+    response_model=DocumentListResponse,
+)
+async def get_active_documents(
+    document_service: DocumentService = Depends(
+        get_async_document_service,
+    ),
+) -> DocumentListResponse:
+    """
+    Return all active documents.
+
+    This endpoint is used by the Streamlit document panel.
+    """
+
+    return await document_service.aget_active_documents()
+
+
+# ============================================================
+# UPLOAD NEW DOCUMENT
+# ============================================================
 
 @router.post(
     "",
@@ -53,7 +80,7 @@ async def upload_document(
         Form(),
     ] = None,
     document_service: DocumentService = Depends(
-        get_async_document_service
+        get_async_document_service,
     ),
 ) -> DocumentUploadResponse:
 
@@ -71,6 +98,10 @@ async def upload_document(
     )
 
 
+# ============================================================
+# UPLOAD NEW DOCUMENT VERSION
+# ============================================================
+
 @router.post(
     "/{document_id}/versions",
     response_model=DocumentUploadResponse,
@@ -84,7 +115,7 @@ async def upload_new_document_version(
         File(...),
     ],
     document_service: DocumentService = Depends(
-        get_async_document_service
+        get_async_document_service,
     ),
 ) -> DocumentUploadResponse:
 

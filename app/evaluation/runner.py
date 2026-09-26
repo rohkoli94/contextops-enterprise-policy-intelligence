@@ -193,11 +193,11 @@ class EvaluationRunner:
                 ),
 
                 # -------------------------------------------------
-                # LangSmith trace correlation
+                # LangFuse trace correlation
                 # -------------------------------------------------
 
-                "langsmith_run_id": state.get(
-                    "langsmith_run_id"
+                "langfuse_trace_id": state.get(
+                    "langfuse_trace_id"
                 ),
 
                 # -------------------------------------------------

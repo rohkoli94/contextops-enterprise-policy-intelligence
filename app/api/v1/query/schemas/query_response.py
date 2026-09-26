@@ -12,6 +12,8 @@ class QueryResponse(BaseModel):
 
     status: str
 
+    conversation_id: str | None = None
+
     citations: list[dict[str, Any]] = Field(
         default_factory=list,
     )

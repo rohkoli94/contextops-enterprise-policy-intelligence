@@ -9,6 +9,9 @@ from app.api.v1.health import (
 from app.api.v1.query.router import (
     router as query_router,
 )
+from app.api.v1.evaluation.router import (
+    router as evaluation_router,
+)
 
 
 router = APIRouter()
@@ -38,4 +41,12 @@ router.include_router(
 
 router.include_router(
     query_router,
+)
+
+# ============================================================
+# EVALUATION
+# ============================================================
+
+router.include_router(
+    evaluation_router,
 )

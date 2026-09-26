@@ -1,7 +1,7 @@
-from unittest.mock import Mock
+﻿from unittest.mock import Mock
 
-from app.evaluation.langsmith_publisher import (
-    LangSmithEvaluationPublisher,
+from app.evaluation.langfuse_publisher import (
+    LangfuseEvaluationPublisher,
 )
 from app.evaluation.metrics import (
     EvaluationMetrics,
@@ -30,7 +30,7 @@ def _result(
         citation_count=1,
         metadata={
             "tenant_id": "tenant-001",
-            "langsmith_run_id": run_id,
+            "langfuse_trace_id": run_id,
         },
         judge_evaluation=LLMJudgeEvaluation(
             correctness_score=4.0,
@@ -61,7 +61,7 @@ def test_publish_result_creates_three_feedback_items() -> None:
     client = Mock()
 
     publisher = (
-        LangSmithEvaluationPublisher(
+        LangfuseEvaluationPublisher(
             client=client
         )
     )
@@ -72,12 +72,12 @@ def test_publish_result_creates_three_feedback_items() -> None:
 
     assert result is True
 
-    assert client.create_feedback.call_count == 3
+    assert client.create_score.call_count == 3
 
     keys = [
-        call.kwargs["key"]
+        call.kwargs["name"]
         for call in (
-            client.create_feedback.call_args_list
+            client.create_score.call_args_list
         )
     ]
 
@@ -92,7 +92,7 @@ def test_publish_result_skips_missing_run_id() -> None:
     client = Mock()
 
     publisher = (
-        LangSmithEvaluationPublisher(
+        LangfuseEvaluationPublisher(
             client=client
         )
     )
@@ -102,14 +102,14 @@ def test_publish_result_skips_missing_run_id() -> None:
     )
 
     assert result is False
-    client.create_feedback.assert_not_called()
+    client.create_score.assert_not_called()
 
 
 def test_publish_result_skips_missing_judge_result() -> None:
     client = Mock()
 
     publisher = (
-        LangSmithEvaluationPublisher(
+        LangfuseEvaluationPublisher(
             client=client
         )
     )
@@ -148,14 +148,14 @@ def test_publish_result_skips_missing_judge_result() -> None:
     )
 
     assert result is False
-    client.create_feedback.assert_not_called()
+    client.create_score.assert_not_called()
 
 
 def test_publish_results_returns_success_count() -> None:
     client = Mock()
 
     publisher = (
-        LangSmithEvaluationPublisher(
+        LangfuseEvaluationPublisher(
             client=client
         )
     )
@@ -168,21 +168,21 @@ def test_publish_results_returns_success_count() -> None:
     )
 
     assert results == 2
-    assert client.create_feedback.call_count == 6
+    assert client.create_score.call_count == 6
 
 
 def test_publish_metrics_creates_summary_feedback() -> None:
     client = Mock()
 
     publisher = (
-        LangSmithEvaluationPublisher(
+        LangfuseEvaluationPublisher(
             client=client
         )
     )
 
     result = publisher.publish_metrics(
         metrics=_metrics(),
-        run_id="run-001",
+        trace_id="run-001",
         metadata={
             "dataset": "golden",
         },
@@ -190,21 +190,21 @@ def test_publish_metrics_creates_summary_feedback() -> None:
 
     assert result is True
 
-    client.create_feedback.assert_called_once()
+    client.create_score.assert_called_once()
 
     call = (
-        client.create_feedback.call_args
+        client.create_score.call_args
     )
 
-    assert call.kwargs["run_id"] == (
+    assert call.kwargs["trace_id"] == (
         "run-001"
     )
 
-    assert call.kwargs["key"] == (
+    assert call.kwargs["name"] == (
         "contextops_evaluation_summary"
     )
 
-    assert call.kwargs["score"] == (
+    assert call.kwargs["value"] == (
         3.5 / 4.0
     )
 
@@ -221,31 +221,31 @@ def test_publish_metrics_skips_empty_run_id() -> None:
     client = Mock()
 
     publisher = (
-        LangSmithEvaluationPublisher(
+        LangfuseEvaluationPublisher(
             client=client
         )
     )
 
     result = publisher.publish_metrics(
         metrics=_metrics(),
-        run_id="   ",
+        trace_id="   ",
     )
 
     assert result is False
-    client.create_feedback.assert_not_called()
+    client.create_score.assert_not_called()
 
 
 def test_publish_result_handles_client_failure() -> None:
     client = Mock()
 
-    client.create_feedback.side_effect = (
+    client.create_score.side_effect = (
         RuntimeError(
             "LangSmith unavailable"
         )
     )
 
     publisher = (
-        LangSmithEvaluationPublisher(
+        LangfuseEvaluationPublisher(
             client=client
         )
     )
@@ -255,3 +255,5 @@ def test_publish_result_handles_client_failure() -> None:
     )
 
     assert result is False
+
+

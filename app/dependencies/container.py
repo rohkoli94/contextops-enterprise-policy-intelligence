@@ -45,22 +45,20 @@ from app.services.redis_cache import (
 
 
 def create_query_service() -> QueryService:
+
     # ========================================================
     # PROVIDERS
     # ========================================================
 
-    # Provider selection is configuration-driven.
-    #
-    # Example:
-    #   LLM_PROVIDER=microsoft_foundry
-    #
-    # A future open-source provider can be selected without
-    # changing the query workflow.
     llm_provider = get_llm_provider()
 
-    embedding_provider = get_embedding_provider()
+    embedding_provider = (
+        get_embedding_provider()
+    )
 
-    hybrid_retriever = get_hybrid_retriever()
+    hybrid_retriever = (
+        get_hybrid_retriever()
+    )
 
     vector_store = get_vector_store()
 
@@ -68,20 +66,26 @@ def create_query_service() -> QueryService:
     # CONVERSATION MEMORY
     # ========================================================
 
-    conversation_repository = ConversationRepository(
-        session_factory=AsyncSessionLocal,
+    conversation_repository = (
+        ConversationRepository(
+            session_factory=AsyncSessionLocal,
+        )
     )
 
-    conversation_memory = PostgresConversationMemory(
-        repository=conversation_repository,
+    conversation_memory = (
+        PostgresConversationMemory(
+            repository=conversation_repository,
+        )
     )
 
     # ========================================================
     # QUERY REWRITER
     # ========================================================
 
-    query_rewriter = MicrosoftFoundryQueryRewriter(
-        llm_provider=llm_provider,
+    query_rewriter = (
+        MicrosoftFoundryQueryRewriter(
+            llm_provider=llm_provider,
+        )
     )
 
     # ========================================================
@@ -97,11 +101,17 @@ def create_query_service() -> QueryService:
     # GUARDRAILS
     # ========================================================
 
-    authorization_guard = AuthorizationGuard()
+    authorization_guard = (
+        AuthorizationGuard()
+    )
 
-    tenant_isolation_guard = TenantIsolationGuard()
+    tenant_isolation_guard = (
+        TenantIsolationGuard()
+    )
 
-    prompt_injection_guard = PromptInjectionGuard()
+    prompt_injection_guard = (
+        PromptInjectionGuard()
+    )
 
     pii_analyzer = RegexPIIAnalyzer()
 
@@ -115,9 +125,13 @@ def create_query_service() -> QueryService:
     # RETRIEVAL VALIDATION
     # ========================================================
 
-    retrieval_validator = BaselineRetrievalValidator()
+    retrieval_validator = (
+        BaselineRetrievalValidator()
+    )
 
-    grounding_validator = BaselineGroundingValidator()
+    grounding_validator = (
+        BaselineGroundingValidator()
+    )
 
     # ========================================================
     # LANGGRAPH
@@ -145,6 +159,8 @@ def create_query_service() -> QueryService:
 
     query_service = QueryService(
         query_graph=query_graph,
+        conversation_memory=conversation_memory,
+        llm_provider=llm_provider,
         shutdown_resources=[
             llm_provider,
             cache_provider,

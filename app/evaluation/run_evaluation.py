@@ -9,8 +9,8 @@ from app.dependencies.container import (
 from app.evaluation.dataset_loader import (
     EvaluationDatasetLoader,
 )
-from app.evaluation.langsmith_publisher import (
-    LangSmithEvaluationPublisher,
+from app.evaluation.langfuse_publisher import (
+    LangfuseEvaluationPublisher,
 )
 from app.evaluation.llm_judge import (
     LLMJudge,
@@ -108,20 +108,20 @@ async def run_evaluation(
     Flow:
 
         Golden Dataset
-            ↓
+            â†“
         Dataset Loader
-            ↓
+            â†“
         QueryService
-            ↓
+            â†“
         LangGraph
-            ↓
+            â†“
         EvaluationRunner
-            ↓
+            â†“
         LLM Judge
-            ↓
+            â†“
         Evaluation Metrics
-            ↓
-        LangSmith Publisher
+            â†“
+        Langfuse Publisher
     """
 
     query_service = None
@@ -130,7 +130,7 @@ async def run_evaluation(
 
     try:
         # =====================================================
-        # STEP 1 — LOAD DATASET
+        # STEP 1 â€” LOAD DATASET
         # =====================================================
 
         loader = EvaluationDatasetLoader()
@@ -157,7 +157,7 @@ async def run_evaluation(
         )
 
         # =====================================================
-        # STEP 2 — CREATE PRODUCTION QUERY SERVICE
+        # STEP 2 â€” CREATE PRODUCTION QUERY SERVICE
         # =====================================================
 
         query_service = (
@@ -165,7 +165,7 @@ async def run_evaluation(
         )
 
         # =====================================================
-        # STEP 3 — CREATE EVALUATION LLM
+        # STEP 3 â€” CREATE EVALUATION LLM
         # =====================================================
         #
         # The judge uses the same LLM provider abstraction as
@@ -182,7 +182,7 @@ async def run_evaluation(
         )
 
         # =====================================================
-        # STEP 4 — CREATE EVALUATION RUNNER
+        # STEP 4 â€” CREATE EVALUATION RUNNER
         # =====================================================
 
         runner = EvaluationRunner(
@@ -191,7 +191,7 @@ async def run_evaluation(
         )
 
         # =====================================================
-        # STEP 5 — EXECUTE EVALUATION DATASET
+        # STEP 5 â€” EXECUTE EVALUATION DATASET
         # =====================================================
 
         results = await runner.run(
@@ -199,7 +199,7 @@ async def run_evaluation(
         )
 
         # =====================================================
-        # STEP 6 — CALCULATE AGGREGATE METRICS
+        # STEP 6 â€” CALCULATE AGGREGATE METRICS
         # =====================================================
 
         metrics = calculate_evaluation_metrics(
@@ -207,15 +207,15 @@ async def run_evaluation(
         )
 
         # =====================================================
-        # STEP 7 — CREATE LANGSMITH PUBLISHER
+        # STEP 7 â€” CREATE LANGSMITH PUBLISHER
         # =====================================================
 
         publisher = (
-            LangSmithEvaluationPublisher()
+            LangfuseEvaluationPublisher()
         )
 
         # =====================================================
-        # STEP 8 — PUBLISH INDIVIDUAL RESULTS
+        # STEP 8 â€” PUBLISH INDIVIDUAL RESULTS
         # =====================================================
 
         published_count = 0
@@ -231,14 +231,14 @@ async def run_evaluation(
                 published_count += 1
 
         # =====================================================
-        # STEP 9 — PUBLISH AGGREGATE METRICS
+        # STEP 9 â€” PUBLISH AGGREGATE METRICS
         # =====================================================
         #
-        # A LangSmith feedback item is run-scoped.
+        # A Langfuse feedback item is run-scoped.
         #
         # For the prototype, aggregate metrics are attached to
         # the first evaluation run so the complete experiment
-        # remains discoverable from LangSmith.
+        # remains discoverable from Langfuse.
         #
         # The dedicated experiment/dataset integration can be
         # introduced as the evaluation dataset grows.
@@ -248,7 +248,7 @@ async def run_evaluation(
 
         if results:
             first_run_id = results[0].metadata.get(
-                "langsmith_run_id"
+                "langfuse_trace_id"
             )
 
             if isinstance(
@@ -268,7 +268,7 @@ async def run_evaluation(
                 )
 
         # =====================================================
-        # STEP 10 — LOG SUMMARY
+        # STEP 10 â€” LOG SUMMARY
         # =====================================================
 
         logger.info(
@@ -307,10 +307,10 @@ async def run_evaluation(
                 "judge_evaluation_coverage": (
                     metrics.judge_evaluation_coverage
                 ),
-                "langsmith_results_published": (
+                "langfuse_results_published": (
                     published_count
                 ),
-                "langsmith_aggregate_published": (
+                "langfuse_aggregate_published": (
                     aggregate_published
                 ),
             },
@@ -530,3 +530,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

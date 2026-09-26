@@ -1,0 +1,872 @@
+[
+  {
+    "question": "tell me Business Structure ?",
+    "tenant_id": "contextops",
+    "expected_answer": null,
+    "filters": null,
+    "candidate_source_ids": [
+      "7cd00db9-1b55-45a1-bffe-dfc3da01f47d",
+      "d501d688-6c0b-4257-924f-f31380b2aaeb",
+      "93b364c4-cd4f-4bc1-855e-64673a678a47",
+      "e49c7f7c-6995-4280-81b8-945348dd1af4",
+      "f789b419-b7bf-48f9-838f-1217da440d79",
+      "92720415-72e8-438d-99a7-70c6805429a3",
+      "c3529427-767c-4b5e-909f-c6b0b184bbd0",
+      "307fcdfa-b9dd-49df-ae21-086f0ce6be78",
+      "3715d177-d0af-4788-89ef-b0c8dc4c904d",
+      "7f787dc3-e512-4c51-b34a-b2778f4ab21a",
+      "363a5ef7-d41b-4d3b-a883-bb3ffe89b314",
+      "e4c18194-84bd-4694-a4b7-416ac04ad39f",
+      "953fd4d5-7a33-4048-ae62-a6774a28a363",
+      "de55222d-2a8c-421c-9123-d95cf2742038",
+      "67674940-50a1-456c-b9cb-5e54135c90ca",
+      "5a16465d-e02c-4cd9-a33a-c43a13cbcff4",
+      "a5edd765-30ca-4d7f-915a-515675d03599",
+      "9d6146b2-d7e0-4395-b6cf-011eb7d669fb",
+      "a50409e8-e69b-4c01-a2e4-a12f5b22299c",
+      "32cadae0-2388-4639-86d5-1652d548846c"
+    ],
+    "sources": [
+      {
+        "rank": 1,
+        "chunk_id": "7cd00db9-1b55-45a1-bffe-dfc3da01f47d",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.8333334,
+        "reranker_score": null,
+        "content": "3.2 Business Structure",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 2,
+        "chunk_id": "d501d688-6c0b-4257-924f-f31380b2aaeb",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.7,
+        "reranker_score": null,
+        "content": "| Document | Primary information | Secondary cross-check |\n| --- | --- | --- |\n| ITR | Declared income and tax position | Financial statements |\n| Computation of income | Income components | ITR |\n| Profit and Loss Statement | Revenue and expenses | GST and bank statements |\n| Balance Sheet | Assets and liabilities | Financial statements and loans |\n| GST Registration | Business tax registration | Business profile |\n| GST Returns | Reported taxable activity | Bank receipts and financial statements |\n| Business bank statement | Receipts, payments and obligations | GST and P&L; |\n| Business registration | Business existence and structure | Application form |\n| Partnership deed | Partners and ownership structure | KYC and application |\n| Company documents | Incorporation and ownership information | KYC and application |",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 3,
+        "chunk_id": "93b364c4-cd4f-4bc1-855e-64673a678a47",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.5833334,
+        "reranker_score": null,
+        "content": "| Business structure | Examples of supporting evidence |\n| --- | --- |\n| Sole Proprietorship | Business registration, GST and tax records. |\n| Partnership | Partnership deed and business registration. |\n| LLP | Incorporation and registration records. |\n| Private Limited Company | Incorporation documents and company records. |\n| Other eligible entity | Applicable registration and ownership documents. |",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 4,
+        "chunk_id": "e49c7f7c-6995-4280-81b8-945348dd1af4",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.375,
+        "reranker_score": null,
+        "content": "3.1 Business Applicant Profile\n\nBusiness-loan documentation generally needs to establish that the business exists, that the applicant has the relevant ownership or authority, and that the financial information supplied can be supported through tax records, financial statements and banking information.",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 5,
+        "chunk_id": "f789b419-b7bf-48f9-838f-1217da440d79",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.36666667,
+        "reranker_score": null,
+        "content": "5.2 LAP Underwriting Structure\n\nBorrower side: KYC -> income -> banking -> credit -> business information where applicable\n\nProperty side: ownership -> title -> legal status -> property documents -> technical assessment -> valuation -> security creation",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 6,
+        "chunk_id": "92720415-72e8-438d-99a7-70c6805429a3",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.22222222,
+        "reranker_score": null,
+        "content": "| Evidence area | Primary objective |\n| --- | --- |\n| Identity | Establish who the applicant is and confirm required KYC information. |\n| Income | Establish the source, level and supporting evidence of income. |\n| Banking | Understand account activity, income credits, major obligations and cash-flow patterns. |\n| Credit | Review credit history, existing facilities and repayment behaviour. |\n| Business | Understand business existence, ownership or structure, financial performance and tax evidence. |\n| Property | Review ownership, title, legal status, technical attributes and valuation where collateral is involved. |",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 7,
+        "chunk_id": "c3529427-767c-4b5e-909f-c6b0b184bbd0",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.22222222,
+        "reranker_score": null,
+        "content": "| Evidence | Information to review |\n| --- | --- |\n| ITR | Declared income and tax information. |\n| Computation of income | Components contributing to taxable income. |\n| Profit and Loss Statement | Revenue, expenses and reported profit. |\n| Balance Sheet | Assets, liabilities and financial position. |\n| GST records | Tax registration and reported business activity. |\n| Business bank statement | Business receipts, payments and account conduct. |",
+        "page_numbers": [
+          2
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 8,
+        "chunk_id": "307fcdfa-b9dd-49df-ae21-086f0ce6be78",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.21978024,
+        "reranker_score": null,
+        "content": "| Assessment area | Business Loan | Home Loan | Loan Against Property |\n| --- | --- | --- | --- |\n| Primary purpose | Business funding | Purchase or construction of residential property | Funding against property |\n| Borrower assessment | Yes | Yes | Yes |\n| Income verification | Yes | Yes | Yes |\n| Bank statement review | Yes | Yes | Yes |\n| Business documentation | Core for business applicants | Relevant mainly for self-employed applicants | Relevant where borrower is self-employed or the facility supports business needs |\n| Property documentation | Usually not the core security evidence | Core part of property-finance assessment | Core collateral evidence |\n| Legal property review | Not normally central | Relevant | Central |\n| Technical property review | Not normally central | Relevant | Central |\n| Property valuation | Not normally central | Relevant | Central |\n| Credit assessment | Yes | Yes | Yes |\n| Repayment-capacity assessment | Yes | Yes | Yes |",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 9,
+        "chunk_id": "3715d177-d0af-4788-89ef-b0c8dc4c904d",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.20952383,
+        "reranker_score": null,
+        "content": "3.4 Business Analysis Areas",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 10,
+        "chunk_id": "7f787dc3-e512-4c51-b34a-b2778f4ab21a",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.2,
+        "reranker_score": null,
+        "content": "| Revenue | Review the scale and trend of reported business activity. |\n| --- | --- |\n| Profitability | Understand whether reported revenue results in sufficient operating profit. |\n| Banking behaviour | Review receipts, regular payments and existing financial commitments. |\n| Business continuity | Check evidence supporting the existence and continuity of the business. |\n| Tax compliance | Compare tax and GST records with the financial information provided. |\n| Existing debt | Identify existing loans and other financial obligations visible in available records. |",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 11,
+        "chunk_id": "363a5ef7-d41b-4d3b-a883-bb3ffe89b314",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.19642857,
+        "reranker_score": null,
+        "content": "3. Business Loan Underwriting",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 12,
+        "chunk_id": "e4c18194-84bd-4694-a4b7-416ac04ad39f",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.16666667,
+        "reranker_score": null,
+        "content": "2.3 Self-Employed Income Assessment\n\nSelf-employed assessment is generally broader because income may originate from a business or professional activity rather than a fixed payroll. Commonly requested evidence includes ITRs, computation of income, financial statements, business proof and bank statements.",
+        "page_numbers": [
+          2
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 13,
+        "chunk_id": "953fd4d5-7a33-4048-ae62-a6774a28a363",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.1534091,
+        "reranker_score": null,
+        "content": "| Category | Document examples | Review objective |\n| --- | --- | --- |\n| Identity | PAN, Aadhaar, passport | Identify borrower |\n| Address | Utility bill, passport, bank statement | Establish address |\n| Income | Salary slips, ITR, financial statements | Assess income |\n| Banking | Personal or business bank statements | Assess cash flow |\n| Business | GST, registration documents | Establish business profile |\n| Ownership | Title deed, sale deed | Establish ownership |\n| Property history | Previous ownership documents | Review ownership continuity |\n| Construction | Approved building plan | Review construction approval |\n| Tax | Property-tax receipt | Review property record |\n| Approval | NOC where applicable | Review permissions |\n| Existing loan | Loan statement or NOC for transfer cases | Identify existing charge or outstanding |",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 14,
+        "chunk_id": "de55222d-2a8c-421c-9123-d95cf2742038",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.14090909,
+        "reranker_score": null,
+        "content": "| Document | Identity | Income | Banking | Business | Credit | Property |\n| --- | --- | --- | --- | --- | --- | --- |\n| PAN | Yes | No | No | Sometimes | Yes | No |\n| Aadhaar | Yes | No | No | No | No | No |\n| Salary Slip | No | Yes | Indirect | No | No | No |\n| Form 16 | No | Yes | No | No | No | No |\n| ITR | No | Yes | No | Yes | No | No |\n| Bank Statement | No | Yes | Yes | Yes | Yes | No |\n| GST Records | No | Yes | No | Yes | No | No |\n| Profit and Loss | No | Yes | No | Yes | No | No |\n| Balance Sheet | No | Yes | No | Yes | Yes | No |\n| Title Deed | No | No | No | No | No | Yes |\n| Sale Agreement | No | No | No | No | No | Yes |\n| Approved Building Plan | No | No | No | No | No | Yes |\n| Property Tax Receipt | No | No | No | No | No | Yes |",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 15,
+        "chunk_id": "67674940-50a1-456c-b9cb-5e54135c90ca",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.110119045,
+        "reranker_score": null,
+        "content": "Loan Underwriting and Document Verification\n\nBusiness Loan | Home Loan | Loan Against Property\n\nA practical reference for documentary review, financial assessment, credit assessment and property-backed lending.",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 16,
+        "chunk_id": "5a16465d-e02c-4cd9-a33a-c43a13cbcff4",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.10555556,
+        "reranker_score": null,
+        "content": "A convergent flow diagram showing five colored input nodes—Applicant (Identity and KYC), Financial Evidence (Income and banking), Credit Evidence (Credit history and obligations), Business Evidence (Registration and financials), and Property Evidence (Title, legal, technical and valuation)—with arrows from each pointing to a central box labeled \"Underwriting Decision,\" illustrating the factors that feed into an underwriting assessment.",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "diagram"
+      },
+      {
+        "rank": 17,
+        "chunk_id": "a5edd765-30ca-4d7f-915a-515675d03599",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.07692308,
+        "reranker_score": null,
+        "content": "| Assessment area | Evidence examples |\n| --- | --- |\n| Identity | PAN, Aadhaar, passport and other accepted KYC evidence. |\n| Income | Salary slips, Form 16 and ITR. |\n| Banking | Bank statements. |\n| Existing obligations | Loan statements and relevant bank records. |\n| Employment or business | Employment proof or business records. |\n| Credit | Credit information report and facility details. |",
+        "page_numbers": [
+          4
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 18,
+        "chunk_id": "9d6146b2-d7e0-4395-b6cf-011eb7d669fb",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.071428575,
+        "reranker_score": null,
+        "content": "| Term | Meaning | Term | Meaning |\n| --- | --- | --- | --- |\n| KYC | Customer identity and required information verification. | ITR | Income Tax Return. |\n| GST | Goods and Services Tax. | FOIR | Fixed Obligation to Income Ratio. |\n| LTV | Loan-to-Value ratio. | P&L; | Profit and Loss Statement. |\n| Encumbrance | Claim, charge or other legal interest affecting property. | Title | Legal basis of property ownership. |\n| NOC | No Objection Certificate. | IHL | Individual Housing Loan. |",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 19,
+        "chunk_id": "a50409e8-e69b-4c01-a2e4-a12f5b22299c",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.06666667,
+        "reranker_score": null,
+        "content": "5.4 Residential and Commercial Property",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 20,
+        "chunk_id": "32cadae0-2388-4639-86d5-1652d548846c",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.05882353,
+        "reranker_score": null,
+        "content": "| Legal review | Technical review |\n| --- | --- |\n| Ownership and title | Construction status |\n| Transfer history | Approved plan |\n| Encumbrances | Property configuration |\n| Permissions and NOCs | Physical characteristics |\n| Continuity of title | Valuation and measurements |",
+        "page_numbers": [
+          4
+        ],
+        "content_type": "table"
+      }
+    ]
+  },
+  {
+    "question": "Which documents can be used for KYC verification?",
+    "tenant_id": "contextops",
+    "expected_answer": null,
+    "filters": null,
+    "candidate_source_ids": [
+      "93deabf7-83f3-4f0e-bd6f-bde609418236",
+      "9dabc49d-c39f-47ef-a822-ed852ac3fc02",
+      "a5edd765-30ca-4d7f-915a-515675d03599",
+      "d501d688-6c0b-4257-924f-f31380b2aaeb",
+      "9d6146b2-d7e0-4395-b6cf-011eb7d669fb",
+      "28367f24-17e8-4594-8b7d-98dd5aceb38d",
+      "7c3ffb93-3e9f-4af3-8ef5-a0e4dd668b98",
+      "f789b419-b7bf-48f9-838f-1217da440d79",
+      "92720415-72e8-438d-99a7-70c6805429a3",
+      "953fd4d5-7a33-4048-ae62-a6774a28a363",
+      "de61fc19-7b3d-4980-8814-09b64c8063cd",
+      "5a16465d-e02c-4cd9-a33a-c43a13cbcff4",
+      "67674940-50a1-456c-b9cb-5e54135c90ca",
+      "781aa4d9-6d03-4fe8-a0a7-5f4bb310c497",
+      "307fcdfa-b9dd-49df-ae21-086f0ce6be78",
+      "b29045a2-b114-4f4c-a87a-2413b9cc2d06",
+      "93b364c4-cd4f-4bc1-855e-64673a678a47",
+      "de55222d-2a8c-421c-9123-d95cf2742038",
+      "5bb66698-a2e7-44c9-8fc4-d855516484bb",
+      "e49c7f7c-6995-4280-81b8-945348dd1af4"
+    ],
+    "sources": [
+      {
+        "rank": 1,
+        "chunk_id": "93deabf7-83f3-4f0e-bd6f-bde609418236",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.8333334,
+        "reranker_score": null,
+        "content": "2. Applicant, KYC and Income Verification",
+        "page_numbers": [
+          2
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 2,
+        "chunk_id": "9dabc49d-c39f-47ef-a822-ed852ac3fc02",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.5,
+        "reranker_score": null,
+        "content": "1. Purpose of Underwriting\n\nLoan underwriting is the process of reviewing an applicant, the supporting financial information, the proposed purpose of borrowing and, where applicable, the property offered as security. The underwriter uses documentary evidence to establish whether the information provided in the application is complete, internally consistent and sufficient for the applicable credit assessment.\n\nA useful review principle is to avoid evaluating a document in isolation. Information from identity records, income records, bank statements, tax records, business records, credit information and property documents may need to be compared with one another.",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 3,
+        "chunk_id": "a5edd765-30ca-4d7f-915a-515675d03599",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.41025642,
+        "reranker_score": null,
+        "content": "| Assessment area | Evidence examples |\n| --- | --- |\n| Identity | PAN, Aadhaar, passport and other accepted KYC evidence. |\n| Income | Salary slips, Form 16 and ITR. |\n| Banking | Bank statements. |\n| Existing obligations | Loan statements and relevant bank records. |\n| Employment or business | Employment proof or business records. |\n| Credit | Credit information report and facility details. |",
+        "page_numbers": [
+          4
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 4,
+        "chunk_id": "d501d688-6c0b-4257-924f-f31380b2aaeb",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.36666667,
+        "reranker_score": null,
+        "content": "| Document | Primary information | Secondary cross-check |\n| --- | --- | --- |\n| ITR | Declared income and tax position | Financial statements |\n| Computation of income | Income components | ITR |\n| Profit and Loss Statement | Revenue and expenses | GST and bank statements |\n| Balance Sheet | Assets and liabilities | Financial statements and loans |\n| GST Registration | Business tax registration | Business profile |\n| GST Returns | Reported taxable activity | Bank receipts and financial statements |\n| Business bank statement | Receipts, payments and obligations | GST and P&L; |\n| Business registration | Business existence and structure | Application form |\n| Partnership deed | Partners and ownership structure | KYC and application |\n| Company documents | Incorporation and ownership information | KYC and application |",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 5,
+        "chunk_id": "9d6146b2-d7e0-4395-b6cf-011eb7d669fb",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.33333334,
+        "reranker_score": null,
+        "content": "| Term | Meaning | Term | Meaning |\n| --- | --- | --- | --- |\n| KYC | Customer identity and required information verification. | ITR | Income Tax Return. |\n| GST | Goods and Services Tax. | FOIR | Fixed Obligation to Income Ratio. |\n| LTV | Loan-to-Value ratio. | P&L; | Profit and Loss Statement. |\n| Encumbrance | Claim, charge or other legal interest affecting property. | Title | Legal basis of property ownership. |\n| NOC | No Objection Certificate. | IHL | Individual Housing Loan. |",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 6,
+        "chunk_id": "28367f24-17e8-4594-8b7d-98dd5aceb38d",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.325,
+        "reranker_score": null,
+        "content": "2.1 Identity and Address Verification\n\nPublished mortgage documentation commonly requests identity proof, address proof, age or date-of-birth information and photographs. Examples include PAN, Aadhaar, passport, driving licence, voter identification, utility bills and bank statements. The exact acceptable document set depends on the application and lender.",
+        "page_numbers": [
+          2
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 7,
+        "chunk_id": "7c3ffb93-3e9f-4af3-8ef5-a0e4dd668b98",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.30555555,
+        "reranker_score": null,
+        "content": "| Document | Typical information verified |\n| --- | --- |\n| PAN | Applicant name and tax identifier. |\n| Aadhaar | Identity and address information. |\n| Passport | Identity, address and date of birth. |\n| Driving Licence | Identity, address and date of birth. |\n| Voter ID | Identity and address. |\n| Utility document | Address information. |",
+        "page_numbers": [
+          2
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 8,
+        "chunk_id": "f789b419-b7bf-48f9-838f-1217da440d79",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.25757575,
+        "reranker_score": null,
+        "content": "5.2 LAP Underwriting Structure\n\nBorrower side: KYC -> income -> banking -> credit -> business information where applicable\n\nProperty side: ownership -> title -> legal status -> property documents -> technical assessment -> valuation -> security creation",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 9,
+        "chunk_id": "92720415-72e8-438d-99a7-70c6805429a3",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.20952383,
+        "reranker_score": null,
+        "content": "| Evidence area | Primary objective |\n| --- | --- |\n| Identity | Establish who the applicant is and confirm required KYC information. |\n| Income | Establish the source, level and supporting evidence of income. |\n| Banking | Understand account activity, income credits, major obligations and cash-flow patterns. |\n| Credit | Review credit history, existing facilities and repayment behaviour. |\n| Business | Understand business existence, ownership or structure, financial performance and tax evidence. |\n| Property | Review ownership, title, legal status, technical attributes and valuation where collateral is involved. |",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 10,
+        "chunk_id": "953fd4d5-7a33-4048-ae62-a6774a28a363",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.18382353,
+        "reranker_score": null,
+        "content": "| Category | Document examples | Review objective |\n| --- | --- | --- |\n| Identity | PAN, Aadhaar, passport | Identify borrower |\n| Address | Utility bill, passport, bank statement | Establish address |\n| Income | Salary slips, ITR, financial statements | Assess income |\n| Banking | Personal or business bank statements | Assess cash flow |\n| Business | GST, registration documents | Establish business profile |\n| Ownership | Title deed, sale deed | Establish ownership |\n| Property history | Previous ownership documents | Review ownership continuity |\n| Construction | Approved building plan | Review construction approval |\n| Tax | Property-tax receipt | Review property record |\n| Approval | NOC where applicable | Review permissions |\n| Existing loan | Loan statement or NOC for transfer cases | Identify existing charge or outstanding |",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 11,
+        "chunk_id": "de61fc19-7b3d-4980-8814-09b64c8063cd",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.17777778,
+        "reranker_score": null,
+        "content": "6.5 RAG Underwriting Questions\n\nDirect: What documents support salaried income verification? Which documents support property ownership?\n\nCross-section: How should salary information be compared across salary slips, bank statements and Form 16?\n\nMulti-hop: If the applicant is self-employed and applying for a Home Loan, which income, business and property documents should be reviewed?\n\nSource-aware: Which statements are regulatory, which are market data, and which represent common documentary evidence patterns?",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 12,
+        "chunk_id": "5a16465d-e02c-4cd9-a33a-c43a13cbcff4",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.17142858,
+        "reranker_score": null,
+        "content": "A convergent flow diagram showing five colored input nodes—Applicant (Identity and KYC), Financial Evidence (Income and banking), Credit Evidence (Credit history and obligations), Business Evidence (Registration and financials), and Property Evidence (Title, legal, technical and valuation)—with arrows from each pointing to a central box labeled \"Underwriting Decision,\" illustrating the factors that feed into an underwriting assessment.",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "diagram"
+      },
+      {
+        "rank": 13,
+        "chunk_id": "67674940-50a1-456c-b9cb-5e54135c90ca",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.14761905,
+        "reranker_score": null,
+        "content": "Loan Underwriting and Document Verification\n\nBusiness Loan | Home Loan | Loan Against Property\n\nA practical reference for documentary review, financial assessment, credit assessment and property-backed lending.",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 14,
+        "chunk_id": "781aa4d9-6d03-4fe8-a0a7-5f4bb310c497",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.14285715,
+        "reranker_score": null,
+        "content": "1.2 Underwriting Lifecycle\n\nApplication -> document collection -> verification -> financial assessment -> collateral assessment -> credit decision",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 15,
+        "chunk_id": "307fcdfa-b9dd-49df-ae21-086f0ce6be78",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.13333334,
+        "reranker_score": null,
+        "content": "| Assessment area | Business Loan | Home Loan | Loan Against Property |\n| --- | --- | --- | --- |\n| Primary purpose | Business funding | Purchase or construction of residential property | Funding against property |\n| Borrower assessment | Yes | Yes | Yes |\n| Income verification | Yes | Yes | Yes |\n| Bank statement review | Yes | Yes | Yes |\n| Business documentation | Core for business applicants | Relevant mainly for self-employed applicants | Relevant where borrower is self-employed or the facility supports business needs |\n| Property documentation | Usually not the core security evidence | Core part of property-finance assessment | Core collateral evidence |\n| Legal property review | Not normally central | Relevant | Central |\n| Technical property review | Not normally central | Relevant | Central |\n| Property valuation | Not normally central | Relevant | Central |\n| Credit assessment | Yes | Yes | Yes |\n| Repayment-capacity assessment | Yes | Yes | Yes |",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 16,
+        "chunk_id": "b29045a2-b114-4f4c-a87a-2413b9cc2d06",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.12142858,
+        "reranker_score": null,
+        "content": "2.5 Existing Obligations\n\nExisting loan details may be supported through loan agreements, statements or bank records. The underwriting review should consider whether the available records support the obligations declared in the application.\n\nSource: Published home-loan and mortgage-documentation checklists from multiple Indian lenders. The document intentionally presents these as common evidence patterns, not universal approval criteria.",
+        "page_numbers": [
+          2
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 17,
+        "chunk_id": "93b364c4-cd4f-4bc1-855e-64673a678a47",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.11513158,
+        "reranker_score": null,
+        "content": "| Business structure | Examples of supporting evidence |\n| --- | --- |\n| Sole Proprietorship | Business registration, GST and tax records. |\n| Partnership | Partnership deed and business registration. |\n| LLP | Incorporation and registration records. |\n| Private Limited Company | Incorporation documents and company records. |\n| Other eligible entity | Applicable registration and ownership documents. |",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 18,
+        "chunk_id": "de55222d-2a8c-421c-9123-d95cf2742038",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.11111111,
+        "reranker_score": null,
+        "content": "| Document | Identity | Income | Banking | Business | Credit | Property |\n| --- | --- | --- | --- | --- | --- | --- |\n| PAN | Yes | No | No | Sometimes | Yes | No |\n| Aadhaar | Yes | No | No | No | No | No |\n| Salary Slip | No | Yes | Indirect | No | No | No |\n| Form 16 | No | Yes | No | No | No | No |\n| ITR | No | Yes | No | Yes | No | No |\n| Bank Statement | No | Yes | Yes | Yes | Yes | No |\n| GST Records | No | Yes | No | Yes | No | No |\n| Profit and Loss | No | Yes | No | Yes | No | No |\n| Balance Sheet | No | Yes | No | Yes | Yes | No |\n| Title Deed | No | No | No | No | No | Yes |\n| Sale Agreement | No | No | No | No | No | Yes |\n| Approved Building Plan | No | No | No | No | No | Yes |\n| Property Tax Receipt | No | No | No | No | No | Yes |",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 19,
+        "chunk_id": "5bb66698-a2e7-44c9-8fc4-d855516484bb",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.09090909,
+        "reranker_score": null,
+        "content": "| Property attribute | Why it matters |\n| --- | --- |\n| Property type | Determines applicable product and property conditions. |\n| Ownership | Establishes borrower's rights over the property. |\n| Title | Supports legal assessment. |\n| Construction status | Relevant to property eligibility and technical assessment. |\n| Location | Relevant to valuation and legal assessment. |\n| Existing charge | Important for security assessment. |\n| Valuation | Supports collateral assessment. |\n| Documentation | Supports legal and technical verification. |",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 20,
+        "chunk_id": "e49c7f7c-6995-4280-81b8-945348dd1af4",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.07692308,
+        "reranker_score": null,
+        "content": "3.1 Business Applicant Profile\n\nBusiness-loan documentation generally needs to establish that the business exists, that the applicant has the relevant ownership or authority, and that the financial information supplied can be supported through tax records, financial statements and banking information.",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "text"
+      }
+    ]
+  },
+  {
+    "question": "What is the purpose of loan underwriting?",
+    "tenant_id": "contextops",
+    "expected_answer": null,
+    "filters": null,
+    "candidate_source_ids": [
+      "9dabc49d-c39f-47ef-a822-ed852ac3fc02",
+      "307fcdfa-b9dd-49df-ae21-086f0ce6be78",
+      "363a5ef7-d41b-4d3b-a883-bb3ffe89b314",
+      "67674940-50a1-456c-b9cb-5e54135c90ca",
+      "7ca7f1d5-c749-4480-9e16-1fbd9882fa1b",
+      "448ebc88-d27d-4045-beb3-60639f5f8423",
+      "9995fa0f-bf63-4c35-a6e2-bd0f227412c0",
+      "b29045a2-b114-4f4c-a87a-2413b9cc2d06",
+      "b562a1c4-0915-43d8-bad0-b7bfb0a44261",
+      "781aa4d9-6d03-4fe8-a0a7-5f4bb310c497",
+      "f789b419-b7bf-48f9-838f-1217da440d79",
+      "4beaf0ff-c49f-46e9-9f90-ffe511fb8271",
+      "de61fc19-7b3d-4980-8814-09b64c8063cd",
+      "5a16465d-e02c-4cd9-a33a-c43a13cbcff4",
+      "188565bb-a07d-4520-bf2a-3909148eea0a",
+      "259087d8-e314-4ffd-9c79-5fd6e30416e1",
+      "267f039e-9160-4495-ab3f-aaa21b7c7f36",
+      "953fd4d5-7a33-4048-ae62-a6774a28a363",
+      "57533d13-1c71-4624-861b-7eedbd30229a",
+      "e49c7f7c-6995-4280-81b8-945348dd1af4"
+    ],
+    "sources": [
+      {
+        "rank": 1,
+        "chunk_id": "9dabc49d-c39f-47ef-a822-ed852ac3fc02",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 1.0,
+        "reranker_score": null,
+        "content": "1. Purpose of Underwriting\n\nLoan underwriting is the process of reviewing an applicant, the supporting financial information, the proposed purpose of borrowing and, where applicable, the property offered as security. The underwriter uses documentary evidence to establish whether the information provided in the application is complete, internally consistent and sufficient for the applicable credit assessment.\n\nA useful review principle is to avoid evaluating a document in isolation. Information from identity records, income records, bank statements, tax records, business records, credit information and property documents may need to be compared with one another.",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 2,
+        "chunk_id": "307fcdfa-b9dd-49df-ae21-086f0ce6be78",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.44444445,
+        "reranker_score": null,
+        "content": "| Assessment area | Business Loan | Home Loan | Loan Against Property |\n| --- | --- | --- | --- |\n| Primary purpose | Business funding | Purchase or construction of residential property | Funding against property |\n| Borrower assessment | Yes | Yes | Yes |\n| Income verification | Yes | Yes | Yes |\n| Bank statement review | Yes | Yes | Yes |\n| Business documentation | Core for business applicants | Relevant mainly for self-employed applicants | Relevant where borrower is self-employed or the facility supports business needs |\n| Property documentation | Usually not the core security evidence | Core part of property-finance assessment | Core collateral evidence |\n| Legal property review | Not normally central | Relevant | Central |\n| Technical property review | Not normally central | Relevant | Central |\n| Property valuation | Not normally central | Relevant | Central |\n| Credit assessment | Yes | Yes | Yes |\n| Repayment-capacity assessment | Yes | Yes | Yes |",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 3,
+        "chunk_id": "363a5ef7-d41b-4d3b-a883-bb3ffe89b314",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.44444445,
+        "reranker_score": null,
+        "content": "3. Business Loan Underwriting",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 4,
+        "chunk_id": "67674940-50a1-456c-b9cb-5e54135c90ca",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.4,
+        "reranker_score": null,
+        "content": "Loan Underwriting and Document Verification\n\nBusiness Loan | Home Loan | Loan Against Property\n\nA practical reference for documentary review, financial assessment, credit assessment and property-backed lending.",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 5,
+        "chunk_id": "7ca7f1d5-c749-4480-9e16-1fbd9882fa1b",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.39285713,
+        "reranker_score": null,
+        "content": "4. Home Loan Underwriting",
+        "page_numbers": [
+          4
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 6,
+        "chunk_id": "448ebc88-d27d-4045-beb3-60639f5f8423",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.26785713,
+        "reranker_score": null,
+        "content": "5. Loan Against Property Underwriting",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 7,
+        "chunk_id": "9995fa0f-bf63-4c35-a6e2-bd0f227412c0",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.26666668,
+        "reranker_score": null,
+        "content": "4.1 Borrower Assessment\n\nHome-loan underwriting combines borrower assessment with property assessment. Borrower assessment focuses on identity, income, banking, existing obligations and credit information. Property assessment focuses on the property being financed and the legal and technical evidence available for that property.",
+        "page_numbers": [
+          4
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 8,
+        "chunk_id": "b29045a2-b114-4f4c-a87a-2413b9cc2d06",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.25757575,
+        "reranker_score": null,
+        "content": "2.5 Existing Obligations\n\nExisting loan details may be supported through loan agreements, statements or bank records. The underwriting review should consider whether the available records support the obligations declared in the application.\n\nSource: Published home-loan and mortgage-documentation checklists from multiple Indian lenders. The document intentionally presents these as common evidence patterns, not universal approval criteria.",
+        "page_numbers": [
+          2
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 9,
+        "chunk_id": "b562a1c4-0915-43d8-bad0-b7bfb0a44261",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.25,
+        "reranker_score": null,
+        "content": "| Property document | Primary purpose |\n| --- | --- |\n| Sale Agreement | Transaction details. |\n| Title Deed | Ownership evidence. |\n| Previous Ownership Records | Ownership chain and continuity. |\n| Approved Building Plan | Construction approval. |\n| Property Tax Receipt | Property and tax record. |\n| NOC | Relevant approval or no-objection evidence where applicable. |",
+        "page_numbers": [
+          4
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 10,
+        "chunk_id": "781aa4d9-6d03-4fe8-a0a7-5f4bb310c497",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.18382353,
+        "reranker_score": null,
+        "content": "1.2 Underwriting Lifecycle\n\nApplication -> document collection -> verification -> financial assessment -> collateral assessment -> credit decision",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 11,
+        "chunk_id": "f789b419-b7bf-48f9-838f-1217da440d79",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.15555556,
+        "reranker_score": null,
+        "content": "5.2 LAP Underwriting Structure\n\nBorrower side: KYC -> income -> banking -> credit -> business information where applicable\n\nProperty side: ownership -> title -> legal status -> property documents -> technical assessment -> valuation -> security creation",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 12,
+        "chunk_id": "4beaf0ff-c49f-46e9-9f90-ffe511fb8271",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.15384616,
+        "reranker_score": null,
+        "content": "1.3 Underwriting Interpretation\n\nA regulatory requirement, a lender-specific published requirement, a commonly requested document and a general underwriting practice are not interchangeable. A RAG answer should preserve that distinction and avoid converting an indicative document list into an absolute approval rule.\n\nSources: RBI Annual Report 2024-25; NHB publications; published lender document checklists. Product and document requirements can vary by borrower, product and lender.",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 13,
+        "chunk_id": "de61fc19-7b3d-4980-8814-09b64c8063cd",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.14354068,
+        "reranker_score": null,
+        "content": "6.5 RAG Underwriting Questions\n\nDirect: What documents support salaried income verification? Which documents support property ownership?\n\nCross-section: How should salary information be compared across salary slips, bank statements and Form 16?\n\nMulti-hop: If the applicant is self-employed and applying for a Home Loan, which income, business and property documents should be reviewed?\n\nSource-aware: Which statements are regulatory, which are market data, and which represent common documentary evidence patterns?",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 14,
+        "chunk_id": "5a16465d-e02c-4cd9-a33a-c43a13cbcff4",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.14215687,
+        "reranker_score": null,
+        "content": "A convergent flow diagram showing five colored input nodes—Applicant (Identity and KYC), Financial Evidence (Income and banking), Credit Evidence (Credit history and obligations), Business Evidence (Registration and financials), and Property Evidence (Title, legal, technical and valuation)—with arrows from each pointing to a central box labeled \"Underwriting Decision,\" illustrating the factors that feed into an underwriting assessment.",
+        "page_numbers": [
+          1
+        ],
+        "content_type": "diagram"
+      },
+      {
+        "rank": 15,
+        "chunk_id": "188565bb-a07d-4520-bf2a-3909148eea0a",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.13392857,
+        "reranker_score": null,
+        "content": "6.4 Underwriting Glossary",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 16,
+        "chunk_id": "259087d8-e314-4ffd-9c79-5fd6e30416e1",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.12916666,
+        "reranker_score": null,
+        "content": "4.4 Loan-to-Value\n\nLTV = Loan Amount / Property Value x 100\n\nExample: if an assessed property value is INR 1 crore and the proposed loan is INR 70 lakh, the mathematical LTV is 70%. This example demonstrates the formula only and is not a lending-policy threshold.",
+        "page_numbers": [
+          4
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 17,
+        "chunk_id": "267f039e-9160-4495-ab3f-aaa21b7c7f36",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.116666675,
+        "reranker_score": null,
+        "content": "6. Cross-Product Underwriting Reference",
+        "page_numbers": [
+          6
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 18,
+        "chunk_id": "953fd4d5-7a33-4048-ae62-a6774a28a363",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.0952381,
+        "reranker_score": null,
+        "content": "| Category | Document examples | Review objective |\n| --- | --- | --- |\n| Identity | PAN, Aadhaar, passport | Identify borrower |\n| Address | Utility bill, passport, bank statement | Establish address |\n| Income | Salary slips, ITR, financial statements | Assess income |\n| Banking | Personal or business bank statements | Assess cash flow |\n| Business | GST, registration documents | Establish business profile |\n| Ownership | Title deed, sale deed | Establish ownership |\n| Property history | Previous ownership documents | Review ownership continuity |\n| Construction | Approved building plan | Review construction approval |\n| Tax | Property-tax receipt | Review property record |\n| Approval | NOC where applicable | Review permissions |\n| Existing loan | Loan statement or NOC for transfer cases | Identify existing charge or outstanding |",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "table"
+      },
+      {
+        "rank": 19,
+        "chunk_id": "57533d13-1c71-4624-861b-7eedbd30229a",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.083333336,
+        "reranker_score": null,
+        "content": "5.1 Nature of the Facility\n\nA Loan Against Property is a secured lending product in which eligible property is offered as collateral. Published market documentation describes residential and commercial property as potential collateral, subject to product and property conditions.",
+        "page_numbers": [
+          5
+        ],
+        "content_type": "text"
+      },
+      {
+        "rank": 20,
+        "chunk_id": "e49c7f7c-6995-4280-81b8-945348dd1af4",
+        "document_id": "e4e52698-fec7-4785-b8d8-c83c68d2ee15",
+        "document_version_id": "c80915ea-8aef-401a-b2f1-66b2f7a07bdf",
+        "score": 0.071428575,
+        "reranker_score": null,
+        "content": "3.1 Business Applicant Profile\n\nBusiness-loan documentation generally needs to establish that the business exists, that the applicant has the relevant ownership or authority, and that the financial information supplied can be supported through tax records, financial statements and banking information.",
+        "page_numbers": [
+          3
+        ],
+        "content_type": "text"
+      }
+    ]
+  }
+]

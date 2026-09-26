@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from langsmith import Client
+from langfuse import get_client
 
 from app.config.settings import settings
 from app.evaluation.metrics import EvaluationMetrics
@@ -9,21 +9,13 @@ from app.evaluation.models import EvaluationResult
 
 
 logger = logging.getLogger(
-    "contextops.evaluation.langsmith"
+    "contextops.evaluation.langfuse"
 )
 
 
-class LangSmithEvaluationPublisher:
+class LangfuseEvaluationPublisher:
     """
-    Publish ContextOps evaluation results to LangSmith.
-
-    Responsibilities:
-
-        - create the LangSmith client
-        - associate evaluation feedback with the
-          corresponding LangSmith run
-        - publish LLM-judge scores
-        - publish aggregate evaluation metrics
+    Publish ContextOps evaluation results to Langfuse.
 
     Evaluation remains outside the production LangGraph.
     """
@@ -31,7 +23,7 @@ class LangSmithEvaluationPublisher:
     def __init__(
         self,
         *,
-        client: Client | None = None,
+        client: Any | None = None,
     ) -> None:
         self.client = (
             client
@@ -44,65 +36,72 @@ class LangSmithEvaluationPublisher:
     # =========================================================
 
     @staticmethod
-    def _create_client() -> Client | None:
+    def _create_client() -> Any | None:
         """
-        Create a LangSmith client when tracing is configured.
+        Create or retrieve the configured Langfuse client.
 
-        Returns None when LangSmith is intentionally disabled
-        or credentials are unavailable.
+        Returns:
+            Configured Langfuse client when tracing credentials
+            are available, otherwise None.
         """
 
-        if not settings.langsmith_tracing:
+        if not settings.langfuse_tracing:
             logger.info(
-                "LangSmith evaluation publishing is disabled."
+                "Langfuse evaluation publishing is disabled."
             )
             return None
 
-        if not settings.langsmith_api_key:
+        if not settings.langfuse_public_key:
             logger.warning(
-                "LangSmith evaluation publishing is enabled "
-                "but LANGSMITH_API_KEY is not configured."
+                "Langfuse evaluation publishing is enabled "
+                "but LANGFUSE_PUBLIC_KEY is not configured."
             )
             return None
 
-        return Client(
-            api_url=settings.langsmith_endpoint,
-            api_key=settings.langsmith_api_key,
-        )
+        if not settings.langfuse_secret_key:
+            logger.warning(
+                "Langfuse evaluation publishing is enabled "
+                "but LANGFUSE_SECRET_KEY is not configured."
+            )
+            return None
+
+        return get_client()
 
     # =========================================================
-    # RUN ID
+    # TRACE ID
     # =========================================================
 
     @staticmethod
-    def _get_run_id(
+    def _get_trace_id(
         result: EvaluationResult,
     ) -> str | None:
         """
-        Extract the LangSmith run identifier from an
+        Extract the Langfuse trace identifier from an
         EvaluationResult.
+
+        ContextOps stores the identifier using the
+        `langfuse_trace_id` metadata key.
         """
 
-        run_id = result.metadata.get(
-            "langsmith_run_id"
+        trace_id = result.metadata.get(
+            "langfuse_trace_id"
         )
 
         if not isinstance(
-            run_id,
+            trace_id,
             str,
         ):
             return None
 
-        normalized_run_id = run_id.strip()
+        normalized = trace_id.strip()
 
-        return (
-            normalized_run_id
-            if normalized_run_id
-            else None
-        )
+        if not normalized:
+            return None
+
+        return normalized
 
     # =========================================================
-    # SINGLE RESULT
+    # PUBLISH SINGLE RESULT
     # =========================================================
 
     def publish_result(
@@ -111,48 +110,44 @@ class LangSmithEvaluationPublisher:
         result: EvaluationResult,
     ) -> bool:
         """
-        Publish one evaluation result to its LangSmith run.
+        Publish the LLM-as-a-judge evaluation for one result.
 
-        The LangSmith run ID is obtained from:
+        Three Langfuse scores are created:
 
-            result.metadata["langsmith_run_id"]
+            1. correctness
+            2. grounding
+            3. citation
 
         Returns:
-
-            True:
-                feedback published successfully.
-
-            False:
-                publishing was skipped or failed.
+            True when the scores are successfully published.
+            False when publishing is skipped or fails.
         """
 
         if self.client is None:
             return False
 
-        run_id = self._get_run_id(
+        trace_id = self._get_trace_id(
             result
         )
 
-        if run_id is None:
+        if trace_id is None:
             logger.warning(
-                "Skipping LangSmith evaluation feedback "
-                "because langsmith_run_id is missing.",
+                "Skipping Langfuse evaluation scores because "
+                "langfuse_trace_id is missing.",
                 extra={
                     "question": result.question,
                 },
             )
             return False
 
-        evaluation = (
-            result.judge_evaluation
-        )
+        evaluation = result.judge_evaluation
 
         if evaluation is None:
             logger.debug(
-                "Skipping LangSmith evaluation feedback "
-                "because no LLM-judge result exists.",
+                "Skipping Langfuse evaluation scores because "
+                "no LLM-judge result exists.",
                 extra={
-                    "run_id": run_id,
+                    "trace_id": trace_id,
                 },
             )
             return False
@@ -167,16 +162,13 @@ class LangSmithEvaluationPublisher:
         }
 
         try:
-            # -------------------------------------------------
-            # Correctness
-            # -------------------------------------------------
-
-            self.client.create_feedback(
-                run_id=run_id,
-                key="contextops_correctness",
-                score=(
+            self.client.create_score(
+                name="contextops_correctness",
+                value=float(
                     evaluation.correctness_score
                 ),
+                trace_id=trace_id,
+                data_type="NUMERIC",
                 comment=evaluation.reason,
                 metadata={
                     **base_metadata,
@@ -184,32 +176,26 @@ class LangSmithEvaluationPublisher:
                 },
             )
 
-            # -------------------------------------------------
-            # Grounding
-            # -------------------------------------------------
-
-            self.client.create_feedback(
-                run_id=run_id,
-                key="contextops_grounding",
-                score=(
+            self.client.create_score(
+                name="contextops_grounding",
+                value=float(
                     evaluation.grounding_score
                 ),
+                trace_id=trace_id,
+                data_type="NUMERIC",
                 metadata={
                     **base_metadata,
                     "metric": "grounding",
                 },
             )
 
-            # -------------------------------------------------
-            # Citations
-            # -------------------------------------------------
-
-            self.client.create_feedback(
-                run_id=run_id,
-                key="contextops_citations",
-                score=(
+            self.client.create_score(
+                name="contextops_citations",
+                value=float(
                     evaluation.citation_score
                 ),
+                trace_id=trace_id,
+                data_type="NUMERIC",
                 metadata={
                     **base_metadata,
                     "metric": "citations",
@@ -217,10 +203,10 @@ class LangSmithEvaluationPublisher:
             )
 
             logger.info(
-                "Published ContextOps LLM-judge "
-                "evaluation to LangSmith.",
+                "Published ContextOps LLM-judge evaluation "
+                "to Langfuse.",
                 extra={
-                    "run_id": run_id,
+                    "trace_id": trace_id,
                 },
             )
 
@@ -229,9 +215,9 @@ class LangSmithEvaluationPublisher:
         except Exception:
             logger.exception(
                 "Failed to publish ContextOps evaluation "
-                "feedback to LangSmith.",
+                "scores to Langfuse.",
                 extra={
-                    "run_id": run_id,
+                    "trace_id": trace_id,
                     "question": result.question,
                 },
             )
@@ -239,7 +225,7 @@ class LangSmithEvaluationPublisher:
             return False
 
     # =========================================================
-    # BATCH RESULTS
+    # PUBLISH MULTIPLE RESULTS
     # =========================================================
 
     def publish_results(
@@ -248,10 +234,11 @@ class LangSmithEvaluationPublisher:
         results: list[EvaluationResult],
     ) -> int:
         """
-        Publish all available LLM-judge results.
+        Publish all available LLM-as-a-judge evaluations.
 
         Returns:
-            Number of results successfully published.
+            Number of evaluation results successfully
+            published.
         """
 
         published_count = 0
@@ -265,53 +252,58 @@ class LangSmithEvaluationPublisher:
         return published_count
 
     # =========================================================
-    # AGGREGATE METRICS
+    # PUBLISH AGGREGATE METRICS
     # =========================================================
 
     def publish_metrics(
         self,
         *,
         metrics: EvaluationMetrics,
-        run_id: str,
+        trace_id: str,
         metadata: dict[str, Any] | None = None,
     ) -> bool:
         """
-        Publish aggregate evaluation metrics against a
-        representative LangSmith run.
+        Publish aggregate ContextOps evaluation metrics
+        against a representative Langfuse trace.
 
-        The aggregate metrics are stored in one feedback item.
+        The aggregate metrics are stored as one Langfuse
+        numeric score.
 
         Args:
             metrics:
                 Aggregate ContextOps evaluation metrics.
 
-            run_id:
-                LangSmith run ID associated with the evaluation
-                execution.
+            trace_id:
+                Langfuse trace identifier associated with the
+                evaluation execution.
 
             metadata:
                 Optional additional metadata.
+
+        Returns:
+            True when the aggregate score is published.
+            False when publishing is skipped or fails.
         """
 
         if self.client is None:
             return False
 
         if not isinstance(
-            run_id,
+            trace_id,
             str,
         ):
             logger.warning(
-                "Skipping aggregate LangSmith metrics "
-                "because run_id is invalid."
+                "Skipping aggregate Langfuse metrics because "
+                "trace_id is invalid."
             )
             return False
 
-        normalized_run_id = run_id.strip()
+        normalized_trace_id = trace_id.strip()
 
-        if not normalized_run_id:
+        if not normalized_trace_id:
             logger.warning(
-                "Skipping aggregate LangSmith metrics "
-                "because run_id is empty."
+                "Skipping aggregate Langfuse metrics because "
+                "trace_id is empty."
             )
             return False
 
@@ -319,9 +311,7 @@ class LangSmithEvaluationPublisher:
             "application": "contextops",
             "environment": settings.environment,
             "evaluator": "contextops_evaluation",
-            "total_examples": (
-                metrics.total_examples
-            ),
+            "total_examples": metrics.total_examples,
             "retrieval_hit_rate": (
                 metrics.retrieval_hit_rate
             ),
@@ -360,21 +350,21 @@ class LangSmithEvaluationPublisher:
             )
 
         try:
-            self.client.create_feedback(
-                run_id=normalized_run_id,
-                key="contextops_evaluation_summary",
-                score=(
-                    metrics.average_correctness_score
-                    / 4.0
+            self.client.create_score(
+                name="contextops_evaluation_summary",
+                value=float(
+                    metrics.average_correctness_score / 4.0
                 ),
+                trace_id=normalized_trace_id,
+                data_type="NUMERIC",
                 metadata=aggregate_metadata,
             )
 
             logger.info(
                 "Published ContextOps aggregate "
-                "evaluation metrics to LangSmith.",
+                "evaluation metrics to Langfuse.",
                 extra={
-                    "run_id": normalized_run_id,
+                    "trace_id": normalized_trace_id,
                     "total_examples": (
                         metrics.total_examples
                     ),
@@ -386,9 +376,9 @@ class LangSmithEvaluationPublisher:
         except Exception:
             logger.exception(
                 "Failed to publish aggregate ContextOps "
-                "evaluation metrics to LangSmith.",
+                "metrics to Langfuse.",
                 extra={
-                    "run_id": normalized_run_id,
+                    "trace_id": normalized_trace_id,
                 },
             )
 

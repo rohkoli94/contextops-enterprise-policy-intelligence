@@ -1,3 +1,4 @@
+import re
 import shutil
 import tempfile
 import uuid
@@ -79,8 +80,9 @@ class DoclingDocumentExtractor(DocumentExtractor):
         2. Parse the document using Docling.
         3. Iterate through extracted structured items.
         4. Resolve each item's element type.
-        5. Extract text, tables, or visuals.
-        6. For visuals, call the vision model for semantic analysis.
+        5. Resolve the item's hierarchy level.
+        6. Extract text, tables, or visuals.
+        7. For visuals, call the vision model for semantic analysis.
         """
 
         temp_file_path: Path | None = None
@@ -98,11 +100,55 @@ class DoclingDocumentExtractor(DocumentExtractor):
 
             elements: list[DocumentElement] = []
 
+            # The first structural heading can act as the
+            # document root when Docling labels the document
+            # title as section_header instead of title.
+            first_structural_heading = True
+
             # Iterate through all structured items extracted by Docling.
             #
             # item  -> actual extracted document content/item
-            # level -> hierarchy depth of the item in the document
+            # level -> hierarchy depth reported by Docling
             for item, level in result.document.iterate_items():
+
+                label = getattr(item, "label", None)
+
+                label_value = (
+                    label.value
+                    if hasattr(label, "value")
+                    else str(label)
+                    if label is not None
+                    else ""
+                ).lower()
+
+                # Determine whether this item can affect
+                # document hierarchy.
+                is_structural_heading = label_value in {
+                    "title",
+                    "section_header",
+                    "heading",
+                    "subsection",
+                }
+
+                # Resolve hierarchy using the document's explicit
+                # section numbering when available.
+                #
+                # This is important because some PDFs are returned by
+                # Docling with the same structural level for all
+                # section headers.
+                level = self._resolve_hierarchy_level(
+                    item=item,
+                    level=level,
+                    is_first_structural_heading=(
+                        is_structural_heading
+                        and first_structural_heading
+                    ),
+                )
+
+                # Only the first structural heading is allowed
+                # to become an unnumbered document root.
+                if is_structural_heading:
+                    first_structural_heading = False
 
                 # Determine what type of domain DocumentElement
                 # should be created from the Docling item.
@@ -183,6 +229,107 @@ class DoclingDocumentExtractor(DocumentExtractor):
 
             return Path(temp_file.name)
 
+    def _resolve_hierarchy_level(
+        self,
+        item: Any,
+        level: int,
+        is_first_structural_heading: bool = False,
+    ) -> int:
+        """
+        Resolve the hierarchy level for a Docling item.
+
+        Numbered headings are identified from their explicit section
+        numbering. The first unnumbered structural heading can act as
+        the document root.
+
+        Unnumbered visual/chart titles such as "Revenue Trend" should
+        not create a new hierarchy root.
+        """
+
+        label = getattr(item, "label", None)
+
+        label_value = (
+            label.value
+            if hasattr(label, "value")
+            else str(label)
+            if label is not None
+            else ""
+        ).lower()
+
+        content = getattr(item, "text", "")
+
+        if not isinstance(content, str):
+            content = ""
+
+        content = content.strip()
+
+        # Only structural elements should influence hierarchy.
+        if label_value not in {
+            "title",
+            "section_header",
+            "heading",
+            "subsection",
+        }:
+            return level
+
+        # ---------------------------------------------------------
+        # Explicit numbered hierarchy
+        # ---------------------------------------------------------
+        #
+        # Normal:
+        #   1. Financial Eligibility
+        #   1.1 Minimum Revenue Requirements
+        #
+        # Also handles a PDF where some text accidentally appears
+        # before the heading:
+        #
+        #   Scenario: ... 3. Advanced Underwriting Rules
+        #
+        numbered_match = re.search(
+            r"(?:^|\s)(\d+(?:\.\d+)*)(?:\.)?\s+([A-Z][^\n]*)",
+            content,
+        )
+
+        if numbered_match:
+            section_number = numbered_match.group(1)
+
+            return len(section_number.split("."))
+
+        # ---------------------------------------------------------
+        # Explicit Docling title
+        # ---------------------------------------------------------
+
+        if label_value == "title":
+            return 0
+
+        # ---------------------------------------------------------
+        # First unnumbered structural heading
+        # ---------------------------------------------------------
+        #
+        # Some PDFs have the document title labelled as
+        # section_header instead of title.
+        #
+        # Only the first structural heading is allowed to become
+        # the document root.
+
+        if (
+            label_value == "section_header"
+            and is_first_structural_heading
+        ):
+            return 0
+
+        # ---------------------------------------------------------
+        # Later unnumbered section headers
+        # ---------------------------------------------------------
+        #
+        # Do NOT create a new hierarchy level for unnumbered
+        # visual/chart titles such as:
+        #
+        #   Revenue Trend
+        #
+        # They should inherit the current Docling level.
+        return level
+
     def _resolve_element_type(
         self,
         item: Any,
@@ -252,6 +399,23 @@ class DoclingDocumentExtractor(DocumentExtractor):
             return None
 
         content = content.strip()
+
+        # PDF extraction can merge a scenario/description line with a
+        # following numbered section heading. Normalize that case so the
+        # numbered heading remains the actual structural text element.
+        numbered_heading_match = re.search(
+            r"(\d+(?:\.\d+)*)(?:\.)?\s+([A-Z][^\n]*)",
+            content,
+        )
+
+        if (
+            numbered_heading_match
+            and numbered_heading_match.start() > 0
+            and content.lower().startswith("scenario:")
+        ):
+            section_number = numbered_heading_match.group(1)
+            heading_text = numbered_heading_match.group(2).strip()
+            content = f"{section_number}. {heading_text}"
 
         # Skip empty content.
         if not content:
@@ -635,19 +799,61 @@ class DoclingDocumentExtractor(DocumentExtractor):
 
         metadata: dict[str, Any] = {
             "file_name": file_name,
+
+            # Represents how deeply this item is nested in the
+            # document structure.
+            #
+            # Example:
+            # Level 0 -> Title
+            # Level 1 -> Section
+            # Level 2 -> Subsection
+            # Level 3 -> Paragraph
+            #
+            # Useful later for structure-aware chunking.
             "hierarchy_level": level,
         }
 
         # Document/layout label describing the original type
         # detected by Docling.
+        #
+        # Examples:
+        # text
+        # title
+        # section_header
+        # table
+        # picture
         label = getattr(item, "label", None)
 
         if label is not None:
-            metadata["label"] = (
+            label_value = (
                 label.value
                 if hasattr(label, "value")
                 else str(label)
             )
+
+            label_value_lower = label_value.lower()
+
+            item_text = getattr(item, "text", "")
+            if not isinstance(item_text, str):
+                item_text = ""
+            item_text = item_text.strip()
+
+            if label_value_lower == "section_header":
+                # PDF extraction can merge scenario text with a
+                # numbered section heading. Keep such headings structural.
+                has_numbered_heading = re.search(
+                    r"(?:^|\s)\d+(?:\.\d+)*(?:\.)?\s+[A-Z]",
+                    item_text,
+                ) is not None
+
+                if level == 0 or has_numbered_heading:
+                    metadata["label"] = "section_header"
+                else:
+                    # Unnumbered visual/chart titles such as "Revenue Trend"
+                    # should not create hierarchy nodes.
+                    metadata["label"] = "text"
+            else:
+                metadata["label"] = label_value
 
         # Provenance tells us where the extracted content
         # originally came from in the source document.
@@ -658,6 +864,11 @@ class DoclingDocumentExtractor(DocumentExtractor):
             prov_metadata: dict[str, Any] = {}
 
             # Original source page.
+            #
+            # Useful for:
+            # - Citations
+            # - Opening the correct PDF page
+            # - Source navigation
             page_no = getattr(
                 prov,
                 "page_no",
