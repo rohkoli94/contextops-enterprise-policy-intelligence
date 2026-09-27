@@ -1,4 +1,4 @@
-# ContextOps — Enterprise Policy Intelligence Platform
+# ContextOps — Enterprise Policy Intelligence Platform (GO-LIVE is on 30th September 2026)
 
 ContextOps is an enterprise policy intelligence platform designed to provide
 reliable, grounded answers over large and complex enterprise policy documents.
