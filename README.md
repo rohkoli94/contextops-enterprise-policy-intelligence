@@ -17,18 +17,6 @@ Day 1 establishes the project foundation:
 - Basic project structure
 - Local development environment
 
-## Current Architecture
-
-```text
-Streamlit UI : 8501
-        │
-        ▼
-FastAPI : 8000
-        │
-        ▼
-GET /api/v1/health
-```
-
 ## Day 2 — Configuration & Environment Management
 
 Day 2 introduces centralized application configuration and environment
