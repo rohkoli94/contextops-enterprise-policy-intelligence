@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 
 from app.dependencies.rag import (
     get_hybrid_retriever,

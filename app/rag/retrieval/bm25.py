@@ -15,15 +15,15 @@ class BM25Retriever(RetrievalProvider):
     Flow:
 
         User Query
-            ↓
+            â†“
         SparseEmbeddingProvider
-            ↓
+            â†“
         BM25 Sparse Query
-            ↓
+            â†“
         VectorStore.asearch_sparse()
-            ↓
+            â†“
         Qdrant BM25 Search
-            ↓
+            â†“
         Top-K Retrieved Chunks
     """
 
@@ -50,7 +50,7 @@ class BM25Retriever(RetrievalProvider):
         """
 
         # --------------------------------------------------
-        # STEP 1 — GENERATE BM25 SPARSE QUERY
+        # STEP 1 â€” GENERATE BM25 SPARSE QUERY
         # --------------------------------------------------
 
         sparse_query = (
@@ -60,7 +60,7 @@ class BM25Retriever(RetrievalProvider):
         )
 
         # --------------------------------------------------
-        # STEP 2 — BM25 SEARCH
+        # STEP 2 â€” BM25 SEARCH
         # --------------------------------------------------
 
         return await self.vector_store.asearch_sparse(

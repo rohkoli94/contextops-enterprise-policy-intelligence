@@ -1,5 +1,7 @@
 import re
+import time
 import uuid
+from pathlib import Path
 
 import requests
 import streamlit as st
@@ -7,62 +9,498 @@ import streamlit as st
 from app.config.settings import settings
 
 
-# ========================================
-# Page Configuration
-# ========================================
-
 st.set_page_config(
     page_title="ContextOps",
-    page_icon="📄",
+    page_icon=str(Path(__file__).with_name("contextops_favicon.png")),
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
+DEFAULT_STATE = {
+    "conversation_id": None,
+    "messages": [],
+    "selected_source": None,
+    "selected_document_id": None,
+    "selected_document_name": None,
+    "golden_trace_ids": "",
+    "user_has_uploaded_document": False,
+    "uploaded_document_id": None,
+    "uploaded_document_name": None,
+    "ingestion_ready": False,
+    "pending_question": None,
+}
 
-# ========================================
-# Session State
-# ========================================
+for key, default in DEFAULT_STATE.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
 
-if "conversation_id" not in st.session_state:
+if st.session_state["conversation_id"] is None:
     st.session_state["conversation_id"] = str(uuid.uuid4())
 
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
 
-if "selected_source" not in st.session_state:
-    st.session_state["selected_source"] = None
+def inject_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        :root {
+            /* Metallic Gold + Graphite — modern enterprise luxury */
+            --ctx-bg: #FAFAF9;
+            --ctx-surface: #FAFAF9;
+            --ctx-surface-2: #27272A;
+            --ctx-border: #E0C35A;
+            --ctx-border-strong: #C5A028;
+            --ctx-text: #18181B;
+            --ctx-muted: #52525B;
+            --ctx-brown: #27272A;
+            --ctx-brown-light: #52525B;
+            --ctx-gold: #C5A028;
+            --ctx-gold-light: #E0C35A;
+            --ctx-green: #52525B;
+            --ctx-green-light: #F5F5F4;
+        }
 
-if "selected_document_id" not in st.session_state:
-    st.session_state["selected_document_id"] = None
+        .stApp { background: var(--ctx-bg); color: var(--ctx-text); }
+        [data-testid="stHeader"] { background: rgba(250,250,249,.98); }
+        [data-testid="stToolbar"] { opacity: .82; }
 
-if "selected_document_name" not in st.session_state:
-    st.session_state["selected_document_name"] = None
+        .block-container {
+            max-width: 1180px;
+            padding-top: 4.25rem !important;
+            padding-bottom: 3rem;
+        }
 
-if "golden_trace_ids" not in st.session_state:
-    st.session_state["golden_trace_ids"] = ""
+        /* Brand sits safely below Streamlit's header. */
+        .ctx-brand {
+            display:flex; align-items:center; gap:11px;
+            margin: 0 0 24px;
+        }
+        .ctx-brand-mark {
+            width:40px; height:40px; border-radius:11px;
+            background: linear-gradient(135deg, #C5A028, #E0C35A);
+            display:flex; align-items:center; justify-content:center;
+            color:#FAFAF9; font-size:17px; font-weight:800;
+            box-shadow:0 5px 14px rgba(24,24,27,.10);
+        }
+        .ctx-brand-name {
+            color:#18181B !important;
+            font-size:23px; font-weight:800; line-height:1.05;
+            opacity:1 !important; visibility:visible !important;
+            display:block !important;
+        }
+        .ctx-brand-subtitle {
+            color:#52525B !important; font-size:10px; margin-top:3px;
+            opacity:1 !important; visibility:visible !important;
+            display:block !important;
+        }
+        .ctx-brand > div:last-child {
+            min-width:0; opacity:1 !important; visibility:visible !important;
+        }
+
+        .ctx-card {
+            background:var(--ctx-surface); border:1px solid var(--ctx-border);
+            border-radius:16px; padding:20px;
+            box-shadow:0 5px 18px rgba(24,24,27,.05); margin-bottom:16px;
+        }
+        .ctx-card-title { color:#18181B; font-size:18px; font-weight:800; margin-bottom:4px; }
+        .ctx-card-subtitle { color:var(--ctx-muted); font-size:12px; line-height:1.5; margin-bottom:14px; }
+
+        [data-testid="stFileUploader"] {
+            border:1px dashed #C5A028; border-radius:13px;
+            background:#FAFAF9; padding:12px; margin:6px 0 14px;
+        }
+        [data-testid="stFileUploader"] section { padding:5px 7px; }
+        [data-testid="stFileUploaderDropzone"] { background:transparent; border:0; }
+        [data-testid="stFileUploaderDropzoneInstructions"] > div { color:var(--ctx-muted); }
+        /* Uploader: hide Streamlit's built-in size/help text completely.
+           Keep only the PDF label requested by the product UI. */
+        [data-testid="stFileUploaderDropzoneInstructions"] {
+            font-size:0 !important;
+            color:transparent !important;
+        }
+        [data-testid="stFileUploaderDropzoneInstructions"] * {
+            font-size:0 !important;
+            color:transparent !important;
+            visibility:hidden !important;
+        }
+        [data-testid="stFileUploaderDropzoneInstructions"]::after {
+            content:"PDF";
+            display:block;
+            margin-top:6px;
+            color:var(--ctx-muted) !important;
+            font-size:12px !important;
+            line-height:1.3;
+            visibility:visible !important;
+        }
+        [data-testid="stFileUploader"] button { border-radius:8px; font-weight:700; }
+
+        /* Unified enterprise controls */
+        div[data-testid="stFormSubmitButton"] button,
+        div[data-testid="stButton"] button {
+            border-radius:9px !important;
+            font-weight:700 !important;
+            min-height:36px !important;
+            background:var(--ctx-brown) !important;
+            color:#fffdf9 !important;
+            border:1px solid var(--ctx-brown) !important;
+            box-shadow:none !important;
+        }
+        div[data-testid="stFormSubmitButton"] button:hover,
+        div[data-testid="stButton"] button:hover {
+            background:var(--ctx-gold) !important;
+            border-color:var(--ctx-gold) !important;
+            color:#fffdf9 !important;
+        }
+        div[data-testid="stFormSubmitButton"] button[kind="primary"],
+        div[data-testid="stButton"] button[kind="primary"] {
+            background:var(--ctx-gold) !important;
+            border-color:var(--ctx-gold) !important;
+        }
+
+        .ctx-home-title { color:#18181B; font-size:22px; font-weight:800; margin:0 0 4px; }
+        .ctx-chat-title { color:#18181B; font-size:19px; font-weight:800; margin:4px 0 3px; }
+        .ctx-chat-sub { color:var(--ctx-muted); font-size:11px; margin-bottom:12px; }
+
+        /* Chat area: continuous flow on desktop */
+        .ctx-chat-shell {
+            background:transparent !important;
+            border:0 !important;
+            padding:4px 0 0 !important;
+            min-height:40px;
+        }
+        [data-testid="stChatMessage"] {
+            padding:.25rem 0 !important;
+            margin:9px 0 !important;
+            max-width:100% !important;
+            background:transparent !important;
+            border:0 !important;
+            box-shadow:none !important;
+            outline:none !important;
+        }
+        /* Keep the user's question as a compact, right-aligned chat bubble. */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+            display:flex !important;
+            justify-content:flex-end !important;
+            width:100% !important;
+        }
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) > div {
+            width:auto !important;
+            max-width:64% !important;
+        }
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] {
+            width:auto !important;
+            max-width:100% !important;
+            min-width:0 !important;
+        }
+        [data-testid="stChatMessageAvatarUser"],
+        [data-testid="stChatMessageAvatarAssistant"] { display:none !important; }
+        [data-testid="stChatMessageContent"] {
+            font-size:13px !important;
+            line-height:1.58 !important;
+            width:fit-content !important;
+            max-width:min(76%, 760px) !important;
+            padding:11px 15px !important;
+            border-radius:15px !important;
+        }
+        /* User message: stronger contrast so it can never disappear into the page. */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] {
+            margin-left:0 !important;
+            background:#F3E7B0 !important;
+            border:1px solid #C5A028 !important;
+            color:#18181B !important;
+            border-radius:14px !important;
+            border-bottom-right-radius:5px !important;
+            padding:10px 15px !important;
+            min-height:42px !important;
+            display:flex !important;
+            align-items:center !important;
+            box-sizing:border-box !important;
+            box-shadow:0 2px 7px rgba(24,24,27,.045) !important;
+        }
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) [data-testid="stChatMessageContent"] {
+            margin-right:auto !important;
+            background:var(--ctx-surface) !important;
+            border:1px solid var(--ctx-border) !important;
+            color:#343536 !important;
+            border-bottom-left-radius:5px !important;
+            box-shadow:0 2px 8px rgba(24,24,27,.04) !important;
+        }
+        [data-testid="stChatMessageContent"] p { margin:0 0 .48rem !important; color:inherit !important; }
+        [data-testid="stChatMessageContent"] p:last-child { margin-bottom:0 !important; }
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] p {
+            line-height:1.45 !important;
+            margin:0 !important;
+            padding-bottom:10px !important;
+            box-sizing:border-box !important;
+        }
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] p:last-child {
+            padding-bottom:10px !important;
+        }
+
+        /* Source area is intentionally styled as evidence/citation chips, not large buttons. */
+        .ctx-source-label {
+            color:#52525B; font-size:9px; font-weight:800;
+            text-transform:uppercase; letter-spacing:.08em;
+            margin:10px 0 5px;
+        }
+        .ctx-source-chip-wrap { display:flex; gap:6px; flex-wrap:wrap; margin-top:2px; }
+        .ctx-source-chip {
+            display:inline-flex; align-items:center; gap:5px;
+            padding:4px 9px; border-radius:999px;
+            background:#FAFAF9; border:1px solid #E0C35A;
+            color:#27272A; font-size:10px; font-weight:700;
+        }
+        .ctx-source-chip::before { content:'↗'; font-size:9px; color:var(--ctx-gold); }
+
+        /* Make Streamlit source buttons visually behave like compact citation chips. */
+        .ctx-source-row [data-testid="stButton"] button {
+            min-height:28px !important;
+            height:28px !important;
+            width:auto !important;
+            padding:0 10px !important;
+            border-radius:999px !important;
+            background:#f3eee6 !important;
+            border:1px solid #d9cdbd !important;
+            color:#735b43 !important;
+            font-size:10px !important;
+            font-weight:700 !important;
+            box-shadow:none !important;
+        }
+        .ctx-source-row [data-testid="stButton"] button:hover {
+            background:#E0C35A !important;
+            border-color:#C5A028 !important;
+            color:#18181B !important;
+        }
+
+        /* Query composer: normal document flow on desktop. It is deliberately
+           NOT Streamlit's st.chat_input because Streamlit positions that
+           component as a viewport-level composer, which makes desktop chat
+           feel detached from the conversation. */
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) {
+            margin-top:16px !important;
+            padding:10px 12px !important;
+            background:var(--ctx-surface) !important;
+            border:1px solid var(--ctx-border) !important;
+            border-radius:14px !important;
+            box-shadow:0 3px 12px rgba(48,45,40,.035) !important;
+        }
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-testid="stTextInput"] input {
+            min-height:40px !important;
+            border-radius:10px !important;
+            border:1px solid #E0C35A !important;
+            background:#FAFAF9 !important;
+            color:#18181B !important;
+            caret-color:#C5A028 !important;
+            box-shadow:none !important;
+        }
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) input::placeholder {
+            color:#52525B !important; opacity:1 !important;
+        }
+        /* Streamlit/browser focus ring: keep the composer clean, without the
+           red outline that appears when the input receives focus. */
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) input,
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) input:focus,
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) input:focus-visible,
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-baseweb="input"],
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-baseweb="input"]:focus-within,
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-testid="stTextInput"] > div:focus-within {
+            outline:none !important;
+            box-shadow:none !important;
+        }
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-testid="stTextInput"] > div {
+            border:0 !important;
+            box-shadow:none !important;
+            outline:none !important;
+        }
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-testid="stFormSubmitButton"] button {
+            min-height:40px !important;
+            width:44px !important;
+            padding:0 !important;
+            background:var(--ctx-gold) !important;
+            border:1px solid var(--ctx-gold) !important;
+            color:#fff !important;
+            border-radius:10px !important;
+            font-size:16px !important;
+        }
 
 
-# ========================================
-# Helper Functions
-# ========================================
+        /* Global Streamlit text-input focus cleanup.
+           Applies to Home, Q&A and Admin inputs. Streamlit/BaseWeb can add
+           a red focus ring/box-shadow on focus; keep the enterprise gold
+           border instead. */
+        [data-testid="stTextInput"] input,
+        [data-testid="stTextInput"] input:focus,
+        [data-testid="stTextInput"] input:focus-visible,
+        [data-testid="stTextInput"] > div,
+        [data-testid="stTextInput"] > div:focus-within,
+        [data-testid="stTextArea"] textarea,
+        [data-testid="stTextArea"] textarea:focus,
+        [data-testid="stTextArea"] textarea:focus-visible,
+        [data-testid="stTextArea"] > div,
+        [data-testid="stTextArea"] > div:focus-within,
+        [data-baseweb="input"],
+        [data-baseweb="input"]:focus-within,
+        [data-baseweb="textarea"],
+        [data-baseweb="textarea"]:focus-within {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
+        [data-testid="stTextInput"] > div:focus-within,
+        [data-testid="stTextArea"] > div:focus-within,
+        [data-baseweb="input"]:focus-within,
+        [data-baseweb="textarea"]:focus-within {
+            border-color: #C5A028 !important;
+            outline: none !important;
+            box-shadow: 0 0 0 1px #C5A028 !important;
+        }
+
+        [data-testid="stTextInput"] input:focus,
+        [data-testid="stTextInput"] input:focus-visible,
+        [data-testid="stTextArea"] textarea:focus,
+        [data-testid="stTextArea"] textarea:focus-visible,
+        [data-baseweb="input"] input:focus,
+        [data-baseweb="textarea"] textarea:focus,
+        input:focus,
+        input:focus-visible,
+        textarea:focus,
+        textarea:focus-visible {
+            outline: none !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+        }
+
+        /* Remove the browser/BaseWeb red focus ring from the surrounding
+           control as well. Do not add a replacement focus ring. */
+        [data-testid="stTextInput"]:focus-within,
+        [data-testid="stTextArea"]:focus-within,
+        [data-testid="stTextInput"] > div:focus-within,
+        [data-testid="stTextArea"] > div:focus-within,
+        [data-baseweb="input"]:focus-within,
+        [data-baseweb="textarea"]:focus-within,
+        [data-baseweb="base-input"]:focus-within,
+        [data-testid="stForm"]:has(input:focus),
+        [data-testid="stForm"]:has(textarea:focus) {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
+        .ctx-new-chat-caption { color:var(--ctx-muted); font-size:10px; }
+        .ctx-dialog-note { color:var(--ctx-muted); font-size:11px; margin-bottom:10px; }
+
+        .ctx-status-card { background:#FAFAF9; border:1px solid var(--ctx-border); border-radius:14px; padding:15px; box-shadow:0 4px 14px rgba(24,24,27,.04); margin:10px 0 15px; }
+        .ctx-status-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+        .ctx-status-name { color:#18181B; font-weight:800; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ctx-status-pill { border-radius:999px; padding:4px 9px; background:var(--ctx-green-light); color:var(--ctx-green); font-size:9px; font-weight:800; white-space:nowrap; }
+        .ctx-status-row { display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px solid #E0E0E0; font-size:11px; }
+        .ctx-status-row:last-child { border-bottom:0; }
+        .ctx-status-dot { width:17px; height:17px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; flex:0 0 17px; }
+        .ctx-status-done { background:var(--ctx-green-light); color:var(--ctx-green); }
+        .ctx-status-active { background:#E0C35A; color:var(--ctx-brown); }
+        .ctx-status-wait { background:#F4F4F5; color:#71717A; }
+        .ctx-status-label { color:#27272A; font-weight:700; }
+        .ctx-status-sub { color:#71717A; margin-left:auto; font-size:9px; }
+        .ctx-spin { width:11px; height:11px; border:2px solid #E0C35A; border-top-color:#C5A028; border-radius:50%; animation:ctxspin .8s linear infinite; }
+        @keyframes ctxspin { to { transform:rotate(360deg); } }
+        .ctx-ready { padding:11px 13px; margin-top:11px; border-radius:10px; background:var(--ctx-green-light); border:1px solid #E0C35A; color:#27272A; font-size:11px; font-weight:800; }
+
+        @media(max-width:700px) {
+            /* Keep the brand safely below Streamlit's native mobile header. */
+            .block-container { padding:4.15rem .65rem 5.5rem !important; }
+            .ctx-brand {
+                display:flex !important;
+                align-items:center !important;
+                flex-wrap:nowrap !important;
+                margin:0 0 16px !important;
+                min-height:40px !important;
+                opacity:1 !important; visibility:visible !important;
+            }
+            .ctx-brand-mark { width:36px; height:36px; border-radius:9px; font-size:14px; flex:0 0 36px; }
+            .ctx-brand-name {
+                font-size:20px !important;
+                color:#18181B !important;
+                opacity:1 !important; visibility:visible !important;
+                display:block !important;
+                white-space:nowrap !important;
+            }
+            .ctx-brand-subtitle {
+                font-size:9px !important;
+                color:#52525B !important;
+                opacity:1 !important; visibility:visible !important;
+                display:block !important;
+                white-space:nowrap !important;
+            }
+            .ctx-card { padding:14px; border-radius:13px; overflow:visible !important; }
+            .ctx-brand-name, .ctx-brand-subtitle { overflow:visible !important; text-overflow:clip !important; }
+            .ctx-card-title { font-size:16px; }
+            .ctx-home-title { font-size:20px; }
+            [data-testid="stChatMessageContent"] { max-width:89% !important; font-size:13px !important; }
+            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) > div {
+                max-width:82% !important;
+            }
+            /* On phones the composer follows the familiar mobile chat pattern
+               and stays available at the bottom. Desktop remains in flow. */
+            [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) {
+                position:fixed !important;
+                left:.65rem !important; right:.65rem !important; bottom:.65rem !important;
+                width:auto !important; margin:0 !important;
+                padding:.45rem !important;
+                background:#FAFAF9 !important;
+                border:1px solid var(--ctx-border) !important;
+                border-radius:13px !important;
+                box-shadow:0 8px 25px rgba(24,24,27,.12) !important;
+                z-index:999 !important;
+            }
+            .ctx-source-row [data-testid="stButton"] button { width:auto !important; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-def render_answer(
-    answer: str,
-    citations: list[dict],
-    message_id: str,
-) -> None:
-    """
-    Render the answer while converting [SOURCE n]
-    references into clickable buttons.
-    """
+def show_request_error(exc: Exception, response=None) -> None:
+    if isinstance(exc, requests.HTTPError):
+        st.error(f"HTTP error occurred: {exc}")
+        if response is not None:
+            try:
+                st.text(response.text)
+            except Exception:
+                pass
+    elif isinstance(exc, requests.RequestException):
+        st.error(f"Request error: {exc}")
+    else:
+        st.error(f"Unexpected error: {exc}")
 
+
+def parse_trace_ids(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def render_answer(answer: str, citations: list[dict], message_id: str) -> None:
     if not answer:
         return
 
-    parts = re.split(
-        r"(\[SOURCE\s+\d+\])",
-        answer,
-    )
+    # Keep source markers out of the visible answer. Show them as compact
+    # clickable chips below the complete answer instead.
+    parts = re.split(r"\[SOURCE\s+(\d+)\]", answer)
+    clean_parts = []
+    source_numbers = []
+
+    for index, part in enumerate(parts):
+        if index % 2 == 0:
+            if part.strip():
+                clean_parts.append(part.strip())
+        else:
+            try:
+                number = int(part)
+                if number not in source_numbers:
+                    source_numbers.append(number)
+            except ValueError:
+                pass
+
+    clean_answer = "\n\n".join(clean_parts).strip()
+    if clean_answer:
+        st.markdown(clean_answer)
 
     citation_map = {
         citation.get("source"): citation
@@ -70,1235 +508,658 @@ def render_answer(
         if citation.get("source") is not None
     }
 
-    for part_index, part in enumerate(parts):
+    valid_sources = [
+        number for number in source_numbers if number in citation_map
+    ]
 
-        source_match = re.fullmatch(
-            r"\[SOURCE\s+(\d+)\]",
-            part.strip(),
+    if valid_sources:
+        st.markdown(
+            '<div class="ctx-source-label">Evidence</div>',
+            unsafe_allow_html=True,
         )
-
-        if source_match:
-
-            source_number = int(
-                source_match.group(1)
-            )
-
-            citation = citation_map.get(
-                source_number
-            )
-
-            if citation:
-
-                button_key = (
-                    f"source_"
-                    f"{message_id}_"
-                    f"{part_index}_"
-                    f"{source_number}"
-                )
-
+        st.markdown('<div class="ctx-source-row">', unsafe_allow_html=True)
+        columns = st.columns(min(len(valid_sources), 4))
+        for index, source_number in enumerate(valid_sources):
+            citation = citation_map[source_number]
+            with columns[index % len(columns)]:
                 if st.button(
-                    f"🔗 [SOURCE {source_number}]",
-                    key=button_key,
+                    f"Source {source_number}",
+                    key=f"source_{message_id}_{source_number}",
+                    type="secondary",
+                    use_container_width=False,
                 ):
-                    st.session_state[
-                        "selected_source"
-                    ] = citation
-
-                    st.rerun()
-
-            else:
-                st.markdown(part)
-
-        else:
-
-            if part:
-                st.markdown(part)
+                    show_source_details(citation)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
-def show_source_details(
-    citation: dict,
-) -> None:
-    """
-    Display the current citation fields.
-    No PDF opening logic.
-    """
-
-    st.subheader("📌 Source Details")
-
-    source_number = citation.get(
-        "source"
-    )
-
-    st.markdown(
-        f"**[SOURCE {source_number}]**"
-    )
-
-    st.divider()
-
-    document_id = citation.get(
-        "document_id"
-    )
-
-    document_version_id = citation.get(
-        "document_version_id"
-    )
-
-    chunk_id = citation.get(
-        "chunk_id"
-    )
-
-    score = citation.get(
-        "score"
-    )
-
-    reranker_score = citation.get(
-        "reranker_score"
-    )
-
-    st.write(
-        "**Document ID**"
-    )
-
-    st.code(
-        str(document_id)
-        if document_id
-        else "N/A"
-    )
-
-    st.write(
-        "**Document Version ID**"
-    )
-
-    st.code(
-        str(document_version_id)
-        if document_version_id
-        else "N/A"
-    )
-
-    st.write(
-        "**Chunk ID**"
-    )
-
-    st.code(
-        str(chunk_id)
-        if chunk_id
-        else "N/A"
-    )
-
-    st.write(
-        "**Retrieval Score**"
-    )
-
-    st.code(
-        str(score)
-        if score is not None
-        else "N/A"
-    )
-
-    st.write(
-        "**Reranker Score**"
-    )
-
-    st.code(
-        str(reranker_score)
-        if reranker_score is not None
-        else "N/A"
-    )
-
-    page_numbers = citation.get(
-        "page_numbers"
-    )
-
-    content_type = citation.get(
-        "content_type"
-    )
-
-    hierarchy_path = citation.get(
-        "hierarchy_path"
-    )
-
-    content = citation.get(
-        "content"
-    )
-
-    if page_numbers:
-
-        st.write(
-            "**Pages**"
-        )
-
-        st.write(
-            page_numbers
-        )
-
-    if content_type:
-
-        st.write(
-            "**Content Type**"
-        )
-
-        st.write(
-            content_type
-        )
-
-    if hierarchy_path:
-
-        st.write(
-            "**Hierarchy**"
-        )
-
-        st.write(
-            hierarchy_path
-        )
-
+@st.dialog("Source details", width="small")
+def show_source_details(citation: dict) -> None:
+    st.markdown('<div class="ctx-dialog-note">Retrieved evidence used to ground this answer.</div>', unsafe_allow_html=True)
+    code_fields = [
+        ("Document", citation.get("document_id")),
+        ("Version", citation.get("document_version_id")),
+        ("Chunk", citation.get("chunk_id")),
+        ("Retrieval score", citation.get("score")),
+        ("Reranker score", citation.get("reranker_score")),
+    ]
+    for label, value in code_fields:
+        if value is not None and value != "":
+            st.caption(label)
+            st.code(str(value), language=None)
+    text_fields = [
+        ("Pages", citation.get("page_numbers")),
+        ("Content type", citation.get("content_type")),
+        ("Hierarchy", citation.get("hierarchy_path")),
+    ]
+    for label, value in text_fields:
+        if value:
+            st.caption(label)
+            st.write(value)
+    content = citation.get("content")
     if content:
+        st.caption("Retrieved content")
+        st.markdown(content)
 
-        st.write(
-            "**Content**"
-        )
 
-        with st.expander(
-            "View retrieved content"
-        ):
-            st.write(
-                content
+def upload_document(
+    uploaded_file,
+    document_name: str,
+    categories_input: str,
+    tags_input: str,
+) -> bool:
+    if uploaded_file is None:
+        st.warning("Please select a PDF document.")
+        return False
+
+    if not document_name.strip():
+        st.warning("Please enter a document name.")
+        return False
+
+    if not categories_input.strip():
+        st.warning("Please enter at least one category.")
+        return False
+
+    if not tags_input.strip():
+        st.warning("Please enter at least one tag.")
+        return False
+
+    categories = [x.strip() for x in categories_input.split(",") if x.strip()]
+    tags = [x.strip() for x in tags_input.split(",") if x.strip()]
+
+    if not categories:
+        st.warning("Please enter at least one valid category.")
+        return False
+
+    if not tags:
+        st.warning("Please enter at least one valid tag.")
+        return False
+
+    form_data = [("document_name", document_name.strip())]
+    form_data.extend(("categories", value) for value in categories)
+    form_data.extend(("tags", value) for value in tags)
+
+    uploaded_file.seek(0)
+
+    response = None
+    try:
+        with st.spinner("Uploading and starting ingestion..."):
+            response = requests.post(
+                f"{settings.api_base_url}/api/v1/documents",
+                files={
+                    "file": (
+                        uploaded_file.name,
+                        uploaded_file,
+                        uploaded_file.type or "application/pdf",
+                    )
+                },
+                data=form_data,
+                timeout=120,
             )
 
-    if st.button(
-        "✕ Close Source",
-        key="close_source",
-        use_container_width=True,
-    ):
+        response.raise_for_status()
+        result = response.json()
 
-        st.session_state[
-            "selected_source"
-        ] = None
+        document_id = result.get("document_id") or result.get("id")
+        if not document_id:
+            try:
+                docs = fetch_documents()
+                matches = [d for d in docs if d.get("document_name") == document_name.strip()]
+                if matches:
+                    document_id = matches[-1].get("document_id")
+            except Exception:
+                pass
+        st.session_state["uploaded_document_id"] = document_id
+        st.session_state["uploaded_document_name"] = document_name.strip()
+        st.session_state["ingestion_ready"] = False
+        st.session_state["user_has_uploaded_document"] = True
+        st.session_state["messages"] = []
+        st.session_state["conversation_id"] = str(uuid.uuid4())
+        return True
+    except Exception as exc:
+        show_request_error(exc, response)
+        return False
+
+
+def fetch_documents() -> list[dict]:
+    response = requests.get(
+        f"{settings.api_base_url}/api/v1/documents",
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json().get("documents", [])
+
+
+def ask_question(question: str) -> None:
+    normalized_question = question.strip()
+
+    if not normalized_question:
+        st.warning("Please enter a question.")
+        return
+
+    st.session_state["messages"].append(
+        {"role": "user", "content": normalized_question}
+    )
+
+    payload = {
+        "query": normalized_question,
+        "tenant_id": settings.default_tenant_id,
+        "conversation_id": st.session_state["conversation_id"],
+    }
+
+    response = None
+
+    try:
+        with st.spinner("Searching the knowledge base..."):
+            response = requests.post(
+                f"{settings.api_base_url}/api/v1/query",
+                json=payload,
+                timeout=120,
+            )
+
+        response.raise_for_status()
+        result = response.json()
+
+        st.session_state["messages"].append(
+            {
+                "role": "assistant",
+                "content": result.get("answer", "No answer returned."),
+                "citations": result.get("citations", []),
+                "metadata": result.get("metadata", {}),
+            }
+        )
+
+        backend_conversation_id = result.get("conversation_id")
+        if backend_conversation_id:
+            st.session_state["conversation_id"] = backend_conversation_id
 
         st.rerun()
 
+    except Exception as exc:
+        show_request_error(exc, response)
 
-def generate_golden_dataset(
-    trace_ids: list[str],
-) -> None:
-    """
-    Generate both golden dataset files from
-    the supplied Langfuse trace IDs.
 
-    Backend endpoint:
-    POST /api/v1/evaluation/golden-dataset/generate-files
-    """
+def render_chat() -> None:
+    header_left, header_right = st.columns([7, 1.4], vertical_alignment="center")
 
-    if not trace_ids:
-
-        st.warning(
-            "Please enter at least one Langfuse trace ID."
+    with header_left:
+        st.markdown(
+            '<div class="ctx-chat-title">Ask your document</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="ctx-chat-sub">Grounded answers from your uploaded policy.</div>',
+            unsafe_allow_html=True,
         )
 
+    with header_right:
+        if st.session_state["messages"]:
+            if st.button(
+                "New chat",
+                key="new_chat_top",
+                use_container_width=True,
+            ):
+                st.session_state["conversation_id"] = str(uuid.uuid4())
+                st.session_state["messages"] = []
+                st.session_state["selected_source"] = None
+                st.rerun()
+
+    st.markdown('<div class="ctx-chat-shell">', unsafe_allow_html=True)
+
+    for index, message in enumerate(st.session_state["messages"]):
+        role = message.get("role")
+        content = message.get("content", "")
+
+        with st.chat_message(role):
+            if role == "assistant":
+                render_answer(
+                    content,
+                    message.get("citations", []),
+                    f"message_{index}",
+                )
+            else:
+                st.markdown(content)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Keep the composer inside the conversation flow on desktop.
+    # On mobile CSS moves only this form to the bottom of the viewport.
+    with st.form("query_composer", clear_on_submit=True, border=False):
+        composer_left, composer_send = st.columns([12, 0.8], vertical_alignment="center")
+        with composer_left:
+            question = st.text_input(
+                "Question",
+                placeholder="Ask a question about your document...",
+                label_visibility="collapsed",
+            )
+        with composer_send:
+            submitted = st.form_submit_button("↑", type="primary")
+
+    if submitted and question:
+        # Persist the user message first, then rerun. This makes the
+        # submitted question visible immediately, before the backend call.
+        normalized_question = question.strip()
+        if normalized_question:
+            st.session_state["messages"].append(
+                {"role": "user", "content": normalized_question}
+            )
+            st.session_state["pending_question"] = normalized_question
+            st.rerun()
+
+    # The next run renders the persisted user bubble before making the API call.
+    pending_question = st.session_state.get("pending_question")
+    if pending_question:
+        st.session_state["pending_question"] = None
+
+        payload = {
+            "query": pending_question,
+            "tenant_id": settings.default_tenant_id,
+            "conversation_id": st.session_state["conversation_id"],
+        }
+
+        response = None
+        try:
+            with st.spinner("Searching the knowledge base..."):
+                response = requests.post(
+                    f"{settings.api_base_url}/api/v1/query",
+                    json=payload,
+                    timeout=120,
+                )
+
+            response.raise_for_status()
+            result = response.json()
+
+            st.session_state["messages"].append(
+                {
+                    "role": "assistant",
+                    "content": result.get("answer", "No answer returned."),
+                    "citations": result.get("citations", []),
+                    "metadata": result.get("metadata", {}),
+                }
+            )
+
+            backend_conversation_id = result.get("conversation_id")
+            if backend_conversation_id:
+                st.session_state["conversation_id"] = backend_conversation_id
+
+            st.rerun()
+
+        except Exception as exc:
+            show_request_error(exc, response)
+
+
+def get_document_status(document_id: str | None) -> str:
+    if not document_id:
+        return "PROCESSING"
+    response = requests.get(f"{settings.api_base_url}/api/v1/documents", timeout=15)
+    response.raise_for_status()
+    for document in response.json().get("documents", []):
+        if str(document.get("document_id")) == str(document_id):
+            return str(document.get("status") or "PROCESSING").upper()
+    return "PROCESSING"
+
+
+def render_ingestion_status(document_id: str | None, document_name: str) -> bool:
+    status_placeholder = st.empty()
+    started = time.time()
+    timeout_seconds = 300
+    while time.time() - started < timeout_seconds:
+        try:
+            status = get_document_status(document_id)
+        except Exception:
+            status_placeholder.warning("Checking document processing status…")
+            time.sleep(2)
+            continue
+        if status in {"FAILED", "ERROR"}:
+            status_placeholder.error("Document processing failed. Please try again.")
+            return False
+        ready = status in {"INDEXED", "ACTIVE", "COMPLETED", "READY"}
+        if ready:
+            active_stage = 6
+        elif status in {"PROCESSING", "QUEUED"}:
+            active_stage = min(5, max(1, int((time.time() - started) // 3) + 1))
+        else:
+            active_stage = 1
+        stages = ["Text extraction completed", "Chunking completed", "Vector DB updated", "Document version activated", "Document processing completed", "Document ready"]
+        rows=[]
+        for idx,label in enumerate(stages,1):
+            if idx < active_stage or active_stage == 6:
+                dot='<span class="ctx-status-dot ctx-status-done">✓</span>'; sub='Done'
+            elif idx == active_stage:
+                dot='<span class="ctx-status-dot ctx-status-active"><span class="ctx-spin"></span></span>'; sub='Processing'
+            else:
+                dot='<span class="ctx-status-dot ctx-status-wait">•</span>'; sub='Waiting'
+            rows.append(f'<div class="ctx-status-row">{dot}<span class="ctx-status-label">{label}</span><span class="ctx-status-sub">{sub}</span></div>')
+        ready_html='<div class="ctx-ready">✓ Your document is ready — you can now ask questions.</div>' if ready else ''
+        pill="Ready" if ready else "Processing"
+        html='<div class="ctx-status-card"><div class="ctx-status-head"><div class="ctx-status-name">'+document_name+'</div><div class="ctx-status-pill">'+pill+'</div></div>'+''.join(rows)+ready_html+'</div>'
+        status_placeholder.markdown(html, unsafe_allow_html=True)
+        if ready:
+            return True
+        time.sleep(2)
+    status_placeholder.warning("Processing is taking longer than expected. Refresh to check again.")
+    return False
+
+
+def generate_golden_dataset(trace_ids: list[str]) -> None:
+    if not trace_ids:
+        st.warning("Please enter at least one Langfuse trace ID.")
         return
 
-    payload = {
-        "trace_ids": trace_ids
-    }
+    response = None
 
     try:
-
-        with st.spinner(
-            "Generating golden dataset and source candidates..."
-        ):
-
+        with st.spinner("Generating golden dataset and source candidates..."):
             response = requests.post(
-                (
-                    f"{settings.api_base_url}"
-                    f"/api/v1/evaluation/"
-                    f"golden-dataset/generate-files"
-                ),
-                json=payload,
+                f"{settings.api_base_url}/api/v1/evaluation/golden-dataset/generate-files",
+                json={"trace_ids": trace_ids},
                 timeout=300,
             )
 
         response.raise_for_status()
-
         result = response.json()
 
-        example_count = result.get(
-            "example_count",
-            0,
-        )
-
-        candidate_count = result.get(
-            "candidate_count",
-            0,
-        )
-
-        golden_dataset_file = result.get(
-            "golden_dataset_file",
-            "",
-        )
-
-        source_candidates_file = result.get(
-            "golden_source_candidates_file",
-            "",
-        )
+        example_count = result.get("example_count", 0)
+        candidate_count = result.get("candidate_count", 0)
 
         st.success(
-            (
-                "Golden dataset generated successfully. "
-                f"{example_count} examples processed."
-            )
+            f"Golden dataset generated successfully. "
+            f"{example_count} examples processed."
         )
 
-        st.write(
-            f"**Golden examples:** {example_count}"
-        )
+        st.write(f"**Golden examples:** {example_count}")
+        st.write(f"**Source candidate sets:** {candidate_count}")
 
-        st.write(
-            f"**Source candidate sets:** {candidate_count}"
-        )
+        if result.get("golden_dataset_file"):
+            st.write("**Golden dataset file**")
+            st.code(result["golden_dataset_file"])
 
-        if golden_dataset_file:
+        if result.get("golden_source_candidates_file"):
+            st.write("**Source candidates file**")
+            st.code(result["golden_source_candidates_file"])
 
-            st.write(
-                "**Golden dataset file**"
-            )
+        with st.expander("View generated golden dataset"):
+            st.json(result.get("golden_dataset", []))
 
-            st.code(
-                golden_dataset_file
-            )
-
-        if source_candidates_file:
-
-            st.write(
-                "**Source candidates file**"
-            )
-
-            st.code(
-                source_candidates_file
-            )
-
-        with st.expander(
-            "View generated golden dataset",
-            expanded=False,
-        ):
-
-            st.json(
-                result.get(
-                    "golden_dataset",
-                    [],
-                )
-            )
-
-        with st.expander(
-            "View generated source candidates",
-            expanded=False,
-        ):
-
-            st.json(
-                result.get(
-                    "source_candidates",
-                    [],
-                )
-            )
-
-    except requests.HTTPError as http_err:
-
-        st.error(
-            f"HTTP error occurred: {http_err}"
-        )
-
-        try:
-
-            st.text(
-                response.text
-            )
-
-        except Exception:
-            pass
-
-    except requests.RequestException as req_err:
-
-        st.error(
-            f"Request error: {req_err}"
-        )
+        with st.expander("View generated source candidates"):
+            st.json(result.get("source_candidates", []))
 
     except Exception as exc:
+        show_request_error(exc, response)
 
-        st.error(
-            f"Unexpected error: {exc}"
+
+def render_upload_card(form_key: str, file_key: str | None = None) -> bool:
+    with st.form(form_key):
+        uploaded_file = st.file_uploader(
+            "PDF document",
+            type=["pdf"],
+            key=file_key,
+            label_visibility="collapsed",
         )
 
-
-# ========================================
-# Header
-# ========================================
-
-st.title("ContextOps")
-
-st.caption(
-    "Enterprise Policy Intelligence Platform"
-)
-
-
-# ========================================
-# Header Actions
-# ========================================
-
-header_col1, header_col2, header_col3 = (
-    st.columns(
-        [5, 2.5, 2.5]
-    )
-)
-
-with header_col1:
-
-    st.caption(
-        "Multimodal enterprise policy intelligence"
-    )
-
-
-with header_col2:
-
-    if st.button(
-        "🧪 Generate Golden Dataset",
-        use_container_width=True,
-    ):
-
-        trace_id_text = (
-            st.session_state.get(
-                "golden_trace_ids",
-                "",
-            )
+        document_name = st.text_input(
+            "Document name",
+            placeholder="e.g. Personal Loan Policy",
         )
 
-        trace_ids = [
-            trace_id.strip()
-            for trace_id in trace_id_text.splitlines()
-            if trace_id.strip()
-        ]
-
-        generate_golden_dataset(
-            trace_ids=trace_ids
+        categories = st.text_input(
+            "Categories *",
+            placeholder="e.g. Loans, Personal Loan",
         )
 
-
-with header_col3:
-
-    if st.button(
-        "＋ New Chat",
-        use_container_width=True,
-    ):
-
-        st.session_state[
-            "conversation_id"
-        ] = str(uuid.uuid4())
-
-        st.session_state[
-            "messages"
-        ] = []
-
-        st.session_state[
-            "selected_source"
-        ] = None
-
-        st.rerun()
-
-
-# ========================================
-# Golden Dataset Configuration
-# ========================================
-
-with st.expander(
-    "🧪 Golden Dataset Configuration",
-    expanded=False,
-):
-
-    st.caption(
-        (
-            "Enter one Langfuse trace ID per line. "
-            "You can add any number of trace IDs."
-        )
-    )
-
-    st.text_area(
-        "Langfuse Trace IDs",
-        key="golden_trace_ids",
-        placeholder=(
-            "Paste one Langfuse trace ID per line.\n\n"
-            "Example:\n"
-            "8416eeadc888ead049d6734e4dd6b62d\n"
-            "8a24ef6a9c362bb05f23a2034edfa25f\n"
-            "10a007d8383f475ffc72cb4153ba1734\n"
-            "48c99001c5cfbeea97ffbf2b5b539c5e"
-        ),
-        height=180,
-        help=(
-            "Each non-empty line is treated as one "
-            "Langfuse trace ID."
-        ),
-    )
-
-    trace_id_text = (
-        st.session_state.get(
-            "golden_trace_ids",
-            "",
-        )
-    )
-
-    configured_trace_ids = [
-        trace_id.strip()
-        for trace_id in trace_id_text.splitlines()
-        if trace_id.strip()
-    ]
-
-    st.caption(
-        f"{len(configured_trace_ids)} trace ID(s) configured."
-    )
-
-
-st.caption(
-    f"Conversation ID: "
-    f"`{st.session_state['conversation_id']}`"
-)
-
-
-st.divider()
-
-
-# ========================================
-# Main Workspace
-# Query: 70% | Documents: 30%
-# ========================================
-
-query_column, document_column = st.columns(
-    [7, 3],
-    gap="large",
-)
-
-
-# ========================================
-# LEFT - QUERY WORKSPACE
-# ========================================
-
-with query_column:
-
-    st.subheader(
-        "💬 Ask a Question"
-    )
-
-    st.caption(
-        "Ask questions about your enterprise policy documents."
-    )
-
-
-    # ====================================
-    # Conversation History
-    # ====================================
-
-    if st.session_state["messages"]:
-
-        for message_index, message in enumerate(
-            st.session_state["messages"]
-        ):
-
-            role = message.get(
-                "role"
-            )
-
-            content = message.get(
-                "content",
-                "",
-            )
-
-            with st.chat_message(
-                role
-            ):
-
-                if role == "assistant":
-
-                    render_answer(
-                        answer=content,
-                        citations=message.get(
-                            "citations",
-                            [],
-                        ),
-                        message_id=(
-                            f"message_"
-                            f"{message_index}"
-                        ),
-                    )
-
-                else:
-
-                    st.markdown(
-                        content
-                    )
-
-
-    # ====================================
-    # Question Form
-    # ====================================
-
-    with st.form(
-        "query_form",
-        clear_on_submit=True,
-    ):
-
-        question = st.text_area(
-            "Your Question",
-            placeholder=(
-                "Example: What financial "
-                "documents must be obtained "
-                "for a business loan application?"
-            ),
-            height=120,
+        tags = st.text_input(
+            "Tags *",
+            placeholder="e.g. interest-rate, eligibility",
         )
 
-        tenant_id = st.text_input(
-            "Tenant ID",
-            value=settings.default_tenant_id,
-            placeholder="Enter tenant ID",
-        )
-
-        ask_clicked = st.form_submit_button(
-            "Ask Question",
+        upload_clicked = st.form_submit_button(
+            "Upload Document",
             use_container_width=True,
+            type="primary",
         )
 
+    if not upload_clicked:
+        return False
 
-    # ====================================
-    # Ask Question
-    # ====================================
+    return upload_document(
+        uploaded_file,
+        document_name,
+        categories,
+        tags,
+    )
 
-    if ask_clicked:
 
-        normalized_question = (
-            question.strip()
-        )
-
-        normalized_tenant = (
-            tenant_id.strip()
-        )
-
-        if not normalized_question:
-
-            st.warning(
-                "Please enter a question."
-            )
-
-        elif not normalized_tenant:
-
-            st.warning(
-                "Please enter a tenant ID."
-            )
-
-        else:
-
-            st.session_state[
-                "messages"
-            ].append(
-                {
-                    "role": "user",
-                    "content": normalized_question,
-                }
-            )
-
-            payload = {
-                "query": normalized_question,
-                "tenant_id": normalized_tenant,
-                "conversation_id": (
-                    st.session_state[
-                        "conversation_id"
-                    ]
-                ),
-            }
-
-            try:
-
-                with st.spinner(
-                    "Getting answer..."
-                ):
-
-                    response = requests.post(
-                        (
-                            f"{settings.api_base_url}"
-                            f"/api/v1/query"
-                        ),
-                        json=payload,
-                        timeout=120,
-                    )
-
-                response.raise_for_status()
-
-                result = response.json()
-
-                st.session_state[
-                    "messages"
-                ].append(
-                    {
-                        "role": "assistant",
-                        "content": result.get(
-                            "answer",
-                            "No answer returned.",
-                        ),
-                        "citations": result.get(
-                            "citations",
-                            [],
-                        ),
-                        "metadata": result.get(
-                            "metadata",
-                            {},
-                        ),
-                    }
-                )
-
-                backend_conversation_id = (
-                    result.get(
-                        "conversation_id"
-                    )
-                )
-
-                if backend_conversation_id:
-
-                    st.session_state[
-                        "conversation_id"
-                    ] = (
-                        backend_conversation_id
-                    )
-
+def home_page() -> None:
+    inject_styles()
+    st.markdown('<div class="ctx-brand"><div class="ctx-brand-mark">C</div><div><div class="ctx-brand-name">ContextOps</div><div class="ctx-brand-subtitle">Policy intelligence · Multimodal extraction · Text · Tables · Diagrams · Charts · Images</div></div></div>', unsafe_allow_html=True)
+    if not st.session_state["user_has_uploaded_document"]:
+        with st.container(border=True):
+            st.markdown('<div class="ctx-card-title">Upload PDF</div>', unsafe_allow_html=True)
+            st.markdown('<div class="ctx-card-subtitle">Add a document to start asking questions.</div>', unsafe_allow_html=True)
+            uploaded=render_upload_card("home_upload_form")
+            if uploaded:
                 st.rerun()
-
-            except requests.HTTPError as http_err:
-
-                st.error(
-                    f"HTTP error occurred: "
-                    f"{http_err}"
-                )
-
-                try:
-
-                    st.text(
-                        response.text
-                    )
-
-                except Exception:
-                    pass
-
-            except requests.RequestException as req_err:
-
-                st.error(
-                    f"Request error: "
-                    f"{req_err}"
-                )
-
-            except Exception as exc:
-
-                st.error(
-                    f"Unexpected error: "
-                    f"{exc}"
-                )
+        return
+    document_id=st.session_state.get("uploaded_document_id")
+    document_name=st.session_state.get("uploaded_document_name") or "Document"
+    if not st.session_state.get("ingestion_ready"):
+        if render_ingestion_status(document_id, document_name):
+            st.session_state["ingestion_ready"]=True
+            st.rerun()
+        return
+    render_chat()
 
 
-# ========================================
-# RIGHT - DOCUMENT SIDEBAR
-# ========================================
+def admin_page() -> None:
+    inject_styles()
 
-with document_column:
+    st.markdown(
+        """
+        <div class="ctx-brand">
+            <div class="ctx-brand-mark">C</div>
+            <div>
+                <div class="ctx-brand-name">ContextOps</div>
+                <div class="ctx-brand-subtitle">Enterprise Policy Intelligence</div>
+            </div>
+        </div>
 
-    st.subheader(
-        "📄 Documents"
+        <div class="ctx-admin-bar">
+            <h1>Administration</h1>
+            <p>
+                Manage documents, versions, evaluation datasets and active
+                knowledge-base documents.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-
-    # ====================================
-    # Selected Source
-    # ====================================
-
-    if st.session_state[
-        "selected_source"
-    ]:
-
-        with st.container(
-            border=True
-        ):
-
-            show_source_details(
-                st.session_state[
-                    "selected_source"
-                ]
-            )
-
-
-    # ====================================
-    # Upload New Document
-    # ====================================
-
-    with st.expander(
-        "➕ Upload New Document",
-        expanded=False,
-    ):
-
-        with st.form(
-            "upload_document_form"
-        ):
-
-            uploaded_file = (
-                st.file_uploader(
-                    "Select PDF",
-                    type=["pdf"],
-                )
-            )
-
-            document_name = st.text_input(
-                "Document Name",
-            )
-
-            categories_input = (
-                st.text_input(
-                    "Categories",
-                    placeholder=(
-                        "Business Loan, Home Loan"
-                    ),
-                )
-            )
-
-            tags_input = st.text_input(
-                "Tags",
-                placeholder=(
-                    "under-writing, credit"
-                ),
-            )
-
-            upload_document_clicked = (
-                st.form_submit_button(
-                    "Upload Document",
-                    use_container_width=True,
-                )
-            )
-
-
-        if upload_document_clicked:
-
-            if uploaded_file is None:
-
-                st.warning(
-                    "Please select a document."
-                )
-
-            elif not document_name.strip():
-
-                st.warning(
-                    "Please enter a document name."
-                )
-
-            else:
-
-                try:
-
-                    categories = [
-                        category.strip()
-                        for category in (
-                            categories_input.split(
-                                ","
-                            )
-                        )
-                        if category.strip()
-                    ]
-
-                    tags = [
-                        tag.strip()
-                        for tag in (
-                            tags_input.split(
-                                ","
-                            )
-                        )
-                        if tag.strip()
-                    ]
-
-                    form_data = [
-                        (
-                            "document_name",
-                            document_name.strip(),
-                        )
-                    ]
-
-                    for category in categories:
-
-                        form_data.append(
-                            (
-                                "categories",
-                                category,
-                            )
-                        )
-
-                    for tag in tags:
-
-                        form_data.append(
-                            (
-                                "tags",
-                                tag,
-                            )
-                        )
-
-                    uploaded_file.seek(
-                        0
-                    )
-
-                    files = {
-                        "file": (
-                            uploaded_file.name,
-                            uploaded_file,
-                            uploaded_file.type
-                            or "application/pdf",
-                        )
-                    }
-
-                    with st.spinner(
-                        "Uploading..."
-                    ):
-
-                        response = (
-                            requests.post(
-                                (
-                                    f"{settings.api_base_url}"
-                                    f"/api/v1/documents"
-                                ),
-                                files=files,
-                                data=form_data,
-                                timeout=120,
-                            )
-                        )
-
-                    response.raise_for_status()
-
-                    result = response.json()
-
-                    st.success(
-                        (
-                            "Uploaded successfully! "
-                            f"Version {result['version']}"
-                        )
-                    )
-
-                    st.rerun()
-
-                except requests.HTTPError as http_err:
-
-                    st.error(
-                        f"HTTP error occurred: "
-                        f"{http_err}"
-                    )
-
-                    try:
-
-                        st.text(
-                            response.text
-                        )
-
-                    except Exception:
-                        pass
-
-                except requests.RequestException as req_err:
-
-                    st.error(
-                        f"Request error: "
-                        f"{req_err}"
-                    )
-
-                except Exception as exc:
-
-                    st.error(
-                        f"Unexpected error: "
-                        f"{exc}"
-                    )
-
-
-    # ====================================
-    # Active Documents
-    # ====================================
-
-    st.divider()
-
-    st.subheader(
-        "Active Documents"
+    upload_tab, update_tab, evaluation_tab, documents_tab = st.tabs(
+        [
+            "Upload Document",
+            "Update Version",
+            "Golden Dataset",
+            "Active Documents",
+        ]
     )
 
-    try:
-
-        response = requests.get(
-            (
-                f"{settings.api_base_url}"
-                f"/api/v1/documents"
-            ),
-            timeout=30,
+    with upload_tab:
+        st.markdown(
+            '<div class="ctx-card-title">Upload a new document</div>'
+            '<div class="ctx-card-subtitle">'
+            "Create a new document and its first version."
+            "</div>",
+            unsafe_allow_html=True,
         )
 
-        response.raise_for_status()
-
-        documents = response.json().get(
-            "documents",
-            [],
+        uploaded = render_upload_card(
+            "admin_upload_document_form",
+            file_key="admin_upload_file",
         )
+
+        if uploaded:
+            st.rerun()
+
+    with update_tab:
+        try:
+            documents = fetch_documents()
+        except Exception as exc:
+            show_request_error(exc)
+            documents = []
 
         if not documents:
+            st.info("No active documents available.")
+        else:
+            options = {
+                f"{doc.get('document_name', 'Unnamed')} · "
+                f"v{doc.get('current_version', 'N/A')}": doc
+                for doc in documents
+            }
 
-            st.info(
-                "No documents uploaded."
+            selected_label = st.selectbox(
+                "Document",
+                list(options.keys()),
+            )
+            selected = options[selected_label]
+
+            st.caption(
+                f"Document ID: {selected.get('document_id', 'N/A')}"
             )
 
+            with st.form("admin_update_version_form"):
+                version_file = st.file_uploader(
+                    "New PDF version",
+                    type=["pdf"],
+                    key=f"admin_version_{selected['document_id']}",
+                )
+
+                update_clicked = st.form_submit_button(
+                    "Upload New Version",
+                    use_container_width=True,
+                    type="primary",
+                )
+
+            if update_clicked:
+                if version_file is None:
+                    st.warning("Please select the updated PDF document.")
+                else:
+                    version_file.seek(0)
+                    response = None
+
+                    try:
+                        with st.spinner("Uploading new version..."):
+                            response = requests.post(
+                                f"{settings.api_base_url}"
+                                f"/api/v1/documents/{selected['document_id']}/versions",
+                                files={
+                                    "file": (
+                                        version_file.name,
+                                        version_file,
+                                        version_file.type or "application/pdf",
+                                    )
+                                },
+                                timeout=120,
+                            )
+
+                        response.raise_for_status()
+                        result = response.json()
+
+                        st.success(
+                            f"Version {result.get('version', 'new')} "
+                            "uploaded successfully."
+                        )
+                        st.rerun()
+
+                    except Exception as exc:
+                        show_request_error(exc, response)
+
+    with evaluation_tab:
+        st.markdown(
+            '<div class="ctx-card-title">Generate golden dataset</div>'
+            '<div class="ctx-card-subtitle">'
+            "Provide Langfuse trace IDs, one per line."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        st.text_area(
+            "Langfuse Trace IDs",
+            key="golden_trace_ids",
+            placeholder="One trace ID per line",
+            height=180,
+        )
+
+        trace_ids = parse_trace_ids(
+            st.session_state["golden_trace_ids"]
+        )
+
+        st.caption(f"{len(trace_ids)} trace ID(s) configured.")
+
+        if st.button(
+            "Generate Golden Dataset",
+            use_container_width=True,
+            type="primary",
+        ):
+            generate_golden_dataset(trace_ids)
+
+    with documents_tab:
+        try:
+            documents = fetch_documents()
+        except Exception as exc:
+            show_request_error(exc)
+            documents = []
+
+        if not documents:
+            st.info("No active documents uploaded.")
         else:
+            st.write(f"**{len(documents)} active document(s)**")
 
             for document in documents:
+                name = document.get("document_name", "Unnamed Document")
+                version = document.get("current_version", "N/A")
+                categories = document.get("categories", [])
+                tags = document.get("tags", [])
 
-                document_id = document.get(
-                    "document_id"
-                )
-
-                document_name = document.get(
-                    "document_name",
-                    "Unnamed Document",
-                )
-
-                current_version = document.get(
-                    "current_version",
-                    "N/A",
-                )
-
-                with st.container(
-                    border=True
-                ):
-
-                    st.write(
-                        f"**{document_name}**"
-                    )
-
-                    st.caption(
-                        (
-                            f"Version "
-                            f"v{current_version}"
-                        )
-                    )
-
-                    categories = (
-                        document.get(
-                            "categories",
-                            [],
-                        )
-                    )
-
-                    tags = document.get(
-                        "tags",
-                        [],
+                with st.container(border=True):
+                    st.markdown(
+                        f"**{name}**  \n"
+                        f"Version: **v{version}**"
                     )
 
                     if categories:
-
                         st.caption(
-                            "📁 "
-                            + ", ".join(
-                                categories
-                            )
+                            "Categories: " + ", ".join(categories)
                         )
 
                     if tags:
-
                         st.caption(
-                            "🏷️ "
-                            + ", ".join(
-                                tags
-                            )
+                            "Tags: " + ", ".join(tags)
                         )
 
-                    if st.button(
-                        "Update Version",
-                        key=(
-                            f"update_"
-                            f"{document_id}"
-                        ),
-                        use_container_width=True,
-                    ):
 
-                        st.session_state[
-                            "selected_document_id"
-                        ] = document_id
+pages = [
+    st.Page(home_page, title="Home", url_path="", default=True),
+    st.Page(admin_page, title="Admin", url_path="admin"),
+]
 
-                        st.session_state[
-                            "selected_document_name"
-                        ] = document_name
-
-                        st.rerun()
-
-    except requests.RequestException as exc:
-
-        st.error(
-            (
-                "Unable to load documents: "
-                f"{exc}"
-            )
-        )
-
-
-# ========================================
-# UPDATE DOCUMENT VERSION
-# ========================================
-
-if (
-    st.session_state.get(
-        "selected_document_id"
-    )
-):
-
-    st.divider()
-
-    st.subheader(
-        "🔄 Update: "
-        + str(
-            st.session_state.get(
-                "selected_document_name",
-                "",
-            )
-        )
-    )
-
-    with st.form(
-        "upload_version_form"
-    ):
-
-        version_file = st.file_uploader(
-            "Select New PDF Version",
-            type=["pdf"],
-            key="new_version",
-        )
-
-        upload_col, cancel_col = (
-            st.columns([3, 1])
-        )
-
-        with upload_col:
-
-            upload_version_clicked = (
-                st.form_submit_button(
-                    "Upload New Version",
-                    use_container_width=True,
-                )
-            )
-
-        with cancel_col:
-
-            cancel_clicked = (
-                st.form_submit_button(
-                    "Cancel",
-                    use_container_width=True,
-                )
-            )
-
-
-    # ====================================
-    # Cancel Update
-    # ====================================
-
-    if cancel_clicked:
-
-        st.session_state[
-            "selected_document_id"
-        ] = None
-
-        st.session_state[
-            "selected_document_name"
-        ] = None
-
-        st.rerun()
-
-
-    # ====================================
-    # Upload Version
-    # ====================================
-
-    if upload_version_clicked:
-
-        if version_file is None:
-
-            st.warning(
-                "Please select a document."
-            )
-
-        else:
-
-            try:
-
-                version_file.seek(
-                    0
-                )
-
-                files = {
-                    "file": (
-                        version_file.name,
-                        version_file,
-                        version_file.type
-                        or "application/pdf",
-                    )
-                }
-
-                with st.spinner(
-                    "Uploading new version..."
-                ):
-
-                    response = requests.post(
-                        (
-                            f"{settings.api_base_url}"
-                            f"/api/v1/documents/"
-                            f"{st.session_state['selected_document_id']}"
-                            f"/versions"
-                        ),
-                        files=files,
-                        timeout=120,
-                    )
-
-                response.raise_for_status()
-
-                result = response.json()
-
-                st.success(
-                    (
-                        f"Version {result['version']} "
-                        "uploaded successfully!"
-                    )
-                )
-
-                st.session_state[
-                    "selected_document_id"
-                ] = None
-
-                st.session_state[
-                    "selected_document_name"
-                ] = None
-
-                st.rerun()
-
-            except requests.HTTPError as http_err:
-
-                st.error(
-                    f"HTTP error occurred: "
-                    f"{http_err}"
-                )
-
-                try:
-
-                    st.text(
-                        response.text
-                    )
-
-                except Exception:
-                    pass
-
-            except requests.RequestException as req_err:
-
-                st.error(
-                    f"Request error: "
-                    f"{req_err}"
-                )
-
-            except Exception as exc:
-
-                st.error(
-                    f"Unexpected error: "
-                    f"{exc}"
-                )
+navigation = st.navigation(pages, position="hidden")
+navigation.run()

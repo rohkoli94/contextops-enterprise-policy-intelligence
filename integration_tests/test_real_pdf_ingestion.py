@@ -169,7 +169,7 @@ def upload_document(
 
     print("=" * 70)
     print(
-        "ContextOps — REAL PDF INGESTION "
+        "ContextOps â€” REAL PDF INGESTION "
         "INTEGRATION TEST"
     )
     print("=" * 70)
@@ -330,21 +330,21 @@ def upload_document(
 
     print()
     print("  PDF Upload")
-    print("      ↓")
+    print("      â†“")
     print("  PostgreSQL + Azure Blob")
-    print("      ↓")
+    print("      â†“")
     print("  Background Ingestion")
-    print("      ↓")
+    print("      â†“")
     print("  Docling PDF Extraction")
-    print("      ↓")
+    print("      â†“")
     print("  Structure-aware Chunking")
-    print("      ↓")
+    print("      â†“")
     print("  Dense Embeddings")
-    print("      ↓")
+    print("      â†“")
     print("  BM25 Sparse Embeddings")
-    print("      ↓")
+    print("      â†“")
     print("  Qdrant Upsert")
-    print("      ↓")
+    print("      â†“")
     print("  INDEXED")
 
     print()

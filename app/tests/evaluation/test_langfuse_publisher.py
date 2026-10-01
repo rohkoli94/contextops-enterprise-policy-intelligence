@@ -1,4 +1,4 @@
-﻿from unittest.mock import Mock
+from unittest.mock import Mock
 
 from app.evaluation.langfuse_publisher import (
     LangfuseEvaluationPublisher,
@@ -255,5 +255,3 @@ def test_publish_result_handles_client_failure() -> None:
     )
 
     assert result is False
-
-

@@ -97,15 +97,15 @@ class HybridDocumentChunker(DocumentChunker):
         Overall flow:
 
             DocumentElement[]
-                    ↓
+                    â†“
             Structure-aware grouping
-                    ↓
+                    â†“
             Content-type routing
-                    ↓
+                    â†“
             Content-specific chunking
-                    ↓
+                    â†“
             Token-aware refinement
-                    ↓
+                    â†“
             DocumentChunk[]
         """
 
@@ -159,7 +159,7 @@ class HybridDocumentChunker(DocumentChunker):
         return chunks
 
     # =========================================================
-    # STEP 1 — STRUCTURE-AWARE GROUPING
+    # STEP 1 â€” STRUCTURE-AWARE GROUPING
     # =========================================================
 
     def _group_by_hierarchy(
@@ -289,7 +289,7 @@ class HybridDocumentChunker(DocumentChunker):
         return groups
 
     # =========================================================
-    # STEP 2 — CONTENT TYPE ROUTING
+    # STEP 2 â€” CONTENT TYPE ROUTING
     # =========================================================
 
     def _group_by_content_type(
@@ -364,7 +364,7 @@ class HybridDocumentChunker(DocumentChunker):
         return groups
 
     # =========================================================
-    # STEP 3 — CONTENT-TYPE STRATEGY
+    # STEP 3 â€” CONTENT-TYPE STRATEGY
     # =========================================================
 
     def _chunk_by_content_type(
@@ -417,11 +417,11 @@ class HybridDocumentChunker(DocumentChunker):
         Text strategy:
 
             Structure-aware grouping
-                ↓
+                â†“
             Semantic candidate
-                ↓
+                â†“
             Token check
-                ↓
+                â†“
             Split only if needed
         """
 

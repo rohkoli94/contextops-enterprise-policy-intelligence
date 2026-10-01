@@ -8,6 +8,7 @@ class DocumentListItem(BaseModel):
     document_id: uuid.UUID
     document_name: str
     current_version: int
+    active_version: int | None = None
     status: str
     categories: list[str]
     tags: list[str]

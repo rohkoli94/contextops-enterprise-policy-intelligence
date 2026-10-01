@@ -16,15 +16,15 @@ class DenseRetriever(RetrievalProvider):
     Flow:
 
         User Query
-            ↓
+            â†“
         EmbeddingProvider
-            ↓
+            â†“
         Query Vector
-            ↓
+            â†“
         VectorStore.asearch_dense()
-            ↓
+            â†“
         Qdrant Dense ANN Search
-            ↓
+            â†“
         Top-K Retrieved Chunks
     """
 
@@ -49,7 +49,7 @@ class DenseRetriever(RetrievalProvider):
         """
 
         # --------------------------------------------------
-        # STEP 1 — EMBED QUERY
+        # STEP 1 â€” EMBED QUERY
         # --------------------------------------------------
 
         embedding_response = (
@@ -63,7 +63,7 @@ class DenseRetriever(RetrievalProvider):
         query_vector = embedding_response.vector
 
         # --------------------------------------------------
-        # STEP 2 — DENSE SEARCH
+        # STEP 2 â€” DENSE SEARCH
         # --------------------------------------------------
 
         return await self.vector_store.asearch_dense(

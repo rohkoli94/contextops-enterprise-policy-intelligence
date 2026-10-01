@@ -211,6 +211,7 @@ async def test_aingest_runs_complete_async_pipeline() -> None:
         blob_path="documents/document-001/v1/test.pdf",
         file_name="test.pdf",
         document_version_id=version_id,
+        version_number=3,
         categories=["HR"],
         tags=["remote-work"],
     )
@@ -254,6 +255,11 @@ async def test_aingest_runs_complete_async_pipeline() -> None:
     ]
 
     assert len(result) == 2
+
+    assert all(
+        item.chunk.metadata["version_number"] == 3
+        for item in result
+    )
 
     assert result[0].vector == [
         1.0,
@@ -302,6 +308,13 @@ async def test_aingest_runs_complete_async_pipeline() -> None:
                 "document_version_id"
             ]
             == str(version_id)
+        )
+
+        assert (
+            embedded_chunk.chunk.metadata[
+                "version_status"
+            ]
+            == "PENDING"
         )
 
     assert len(
@@ -359,6 +372,7 @@ async def test_aingest_returns_empty_when_no_chunks() -> None:
         blob_path="documents/test.pdf",
         file_name="test.pdf",
         document_version_id=uuid.uuid4(),
+        version_number=1,
     )
 
     assert result == []

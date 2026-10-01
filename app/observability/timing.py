@@ -85,12 +85,12 @@ def create_timed_node(
             logger.info(
                 "\n"
                 "============================================================\n"
-                "🤖 NODE STARTED: llm_generation\n"
+                "ðŸ¤– NODE STARTED: llm_generation\n"
                 "============================================================"
             )
         else:
             logger.info(
-                "▶ NODE STARTED: %s",
+                "â–¶ NODE STARTED: %s",
                 name,
             )
 
@@ -116,14 +116,14 @@ def create_timed_node(
                 logger.info(
                     "\n"
                     "============================================================\n"
-                    "🤖 NODE COMPLETED: llm_generation\n"
-                    "⏱ duration_ms=%.3f\n"
+                    "ðŸ¤– NODE COMPLETED: llm_generation\n"
+                    "â± duration_ms=%.3f\n"
                     "============================================================",
                     elapsed_ms,
                 )
             else:
                 logger.info(
-                    "✓ NODE COMPLETED: %s | "
+                    "âœ“ NODE COMPLETED: %s | "
                     "duration_ms=%.3f",
                     name,
                     elapsed_ms,
@@ -158,14 +158,14 @@ def create_timed_node(
                 logger.exception(
                     "\n"
                     "============================================================\n"
-                    "🚨 NODE FAILED: llm_generation\n"
-                    "⏱ duration_ms=%.3f\n"
+                    "ðŸš¨ NODE FAILED: llm_generation\n"
+                    "â± duration_ms=%.3f\n"
                     "============================================================",
                     elapsed_ms,
                 )
             else:
                 logger.exception(
-                    "✗ NODE FAILED: %s | "
+                    "âœ— NODE FAILED: %s | "
                     "duration_ms=%.3f",
                     name,
                     elapsed_ms,

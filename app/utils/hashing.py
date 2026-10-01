@@ -24,7 +24,7 @@ def calculate_stream_hash(
     stream.seek(0) 
     """ stream.seek(0) -> reset sthe stream position after reading, otherwise Azure upload may receive the stream at the end.
     [ Start -------------------- End ]
-        ↑
+        â†‘
         stream position reset
     """
     return hasher.hexdigest(), file_size

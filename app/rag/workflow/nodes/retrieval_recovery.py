@@ -30,15 +30,15 @@ def create_retrieval_recovery_node(
     Recovery flow:
 
         failed retrieval validation
-                    ↓
+                    â†“
              query reformulation
-                    ↓
+                    â†“
               broader retrieval
-                    ↓
+                    â†“
                   rerank
-                    ↓
+                    â†“
              re-validation
-                    ↓
+                    â†“
           sufficient / insufficient
 
     If the retry limit has already been reached, the node

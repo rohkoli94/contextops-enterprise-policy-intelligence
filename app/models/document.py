@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,10 +22,27 @@ class Document(Base):
         nullable=False,
     )
 
+    # Latest version that has been uploaded to Blob/PostgreSQL.
+    # This is intentionally different from active_version_id.
     current_version: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
-        default=1,
+        default=0,
+    )
+
+    # Version currently served by RAG retrieval.
+    # A newly uploaded version must not become active until
+    # extraction, chunking, embedding, Qdrant indexing and cache
+    # invalidation have completed successfully.
+    active_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "document_versions.document_version_id",
+            name="fk_documents_active_version_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
     )
 
     status: Mapped[str] = mapped_column(
@@ -53,6 +70,14 @@ class Document(Base):
 
     versions: Mapped[list["DocumentVersion"]] = relationship(
         back_populates="document",
+        foreign_keys="DocumentVersion.document_id",
+        order_by="DocumentVersion.version",
+    )
+
+    active_version: Mapped["DocumentVersion | None"] = relationship(
+        "DocumentVersion",
+        foreign_keys=[active_version_id],
+        post_update=True,
     )
 
     categories: Mapped[list["Category"]] = relationship(

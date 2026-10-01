@@ -85,6 +85,7 @@ class DocumentIngestionService:
         blob_path: str,
         file_name: str,
         document_version_id: uuid.UUID,
+        version_number: int,
         categories: list[str] | None = None,
         tags: list[str] | None = None,
     ) -> list[EmbeddedDocumentChunk]:
@@ -96,7 +97,7 @@ class DocumentIngestionService:
         tags = tags or []
 
         # --------------------------------------------------
-        # STEP 1 — DOWNLOAD
+        # STEP 1 â€” DOWNLOAD
         # --------------------------------------------------
 
         stream = self.storage_provider.download(
@@ -105,7 +106,7 @@ class DocumentIngestionService:
 
         try:
             # --------------------------------------------------
-            # STEP 2 — EXTRACTION
+            # STEP 2 â€” EXTRACTION
             # --------------------------------------------------
 
             elements: list[DocumentElement] = (
@@ -121,7 +122,7 @@ class DocumentIngestionService:
             stream.close()
 
         # --------------------------------------------------
-        # STEP 3 — CHUNKING
+        # STEP 3 â€” CHUNKING
         # --------------------------------------------------
 
         chunks: list[DocumentChunk] = (
@@ -134,18 +135,19 @@ class DocumentIngestionService:
             return []
 
         # --------------------------------------------------
-        # STEP 4 — METADATA ENRICHMENT
+        # STEP 4 â€” METADATA ENRICHMENT
         # --------------------------------------------------
 
         self._enrich_metadata(
             chunks=chunks,
             document_version_id=document_version_id,
+            version_number=version_number,
             categories=categories,
             tags=tags,
         )
 
         # --------------------------------------------------
-        # STEP 5 — DENSE EMBEDDING
+        # STEP 5 â€” DENSE EMBEDDING
         # --------------------------------------------------
 
         texts = [
@@ -164,7 +166,7 @@ class DocumentIngestionService:
         dense_vectors = embedding_response.vectors
 
         # --------------------------------------------------
-        # STEP 6 — SPARSE BM25 EMBEDDING
+        # STEP 6 â€” SPARSE BM25 EMBEDDING
         # --------------------------------------------------
 
         sparse_vectors = (
@@ -174,7 +176,7 @@ class DocumentIngestionService:
         )
 
         # --------------------------------------------------
-        # STEP 7 — BUILD EMBEDDED CHUNKS
+        # STEP 7 â€” BUILD EMBEDDED CHUNKS
         # --------------------------------------------------
 
         embedded_chunks = (
@@ -186,7 +188,7 @@ class DocumentIngestionService:
         )
 
         # --------------------------------------------------
-        # STEP 8 — VECTOR STORE
+        # STEP 8 â€” VECTOR STORE
         # --------------------------------------------------
 
         self.vector_store.upsert(
@@ -205,6 +207,7 @@ class DocumentIngestionService:
         blob_path: str,
         file_name: str,
         document_version_id: uuid.UUID,
+        version_number: int,
         categories: list[str] | None = None,
         tags: list[str] | None = None,
     ) -> list[EmbeddedDocumentChunk]:
@@ -221,7 +224,7 @@ class DocumentIngestionService:
         tags = tags or []
 
         # --------------------------------------------------
-        # STEP 1 — ASYNC DOWNLOAD
+        # STEP 1 â€” ASYNC DOWNLOAD
         # --------------------------------------------------
 
         stream = await self.storage_provider.adownload(
@@ -230,7 +233,7 @@ class DocumentIngestionService:
 
         try:
             # --------------------------------------------------
-            # STEP 2 — ASYNC EXTRACTION
+            # STEP 2 â€” ASYNC EXTRACTION
             # --------------------------------------------------
 
             elements: list[DocumentElement] = (
@@ -246,7 +249,7 @@ class DocumentIngestionService:
             stream.close()
 
         # --------------------------------------------------
-        # STEP 3 — CHUNKING
+        # STEP 3 â€” CHUNKING
         # --------------------------------------------------
 
         chunks: list[DocumentChunk] = (
@@ -259,18 +262,19 @@ class DocumentIngestionService:
             return []
 
         # --------------------------------------------------
-        # STEP 4 — METADATA ENRICHMENT
+        # STEP 4 â€” METADATA ENRICHMENT
         # --------------------------------------------------
 
         self._enrich_metadata(
             chunks=chunks,
             document_version_id=document_version_id,
+            version_number=version_number,
             categories=categories,
             tags=tags,
         )
 
         # --------------------------------------------------
-        # STEP 5 — ASYNC DENSE BATCH EMBEDDING
+        # STEP 5 â€” ASYNC DENSE BATCH EMBEDDING
         # --------------------------------------------------
 
         texts = [
@@ -289,7 +293,7 @@ class DocumentIngestionService:
         dense_vectors = embedding_response.vectors
 
         # --------------------------------------------------
-        # STEP 6 — ASYNC SPARSE BATCH EMBEDDING
+        # STEP 6 â€” ASYNC SPARSE BATCH EMBEDDING
         # --------------------------------------------------
 
         sparse_vectors = (
@@ -299,7 +303,7 @@ class DocumentIngestionService:
         )
 
         # --------------------------------------------------
-        # STEP 7 — BUILD EMBEDDED CHUNKS
+        # STEP 7 â€” BUILD EMBEDDED CHUNKS
         # --------------------------------------------------
 
         embedded_chunks = (
@@ -311,7 +315,7 @@ class DocumentIngestionService:
         )
 
         # --------------------------------------------------
-        # STEP 8 — ASYNC VECTOR STORE UPSERT
+        # STEP 8 â€” ASYNC VECTOR STORE UPSERT
         # --------------------------------------------------
 
         await self.vector_store.aupsert(
@@ -321,6 +325,78 @@ class DocumentIngestionService:
         return embedded_chunks
 
     # ============================================================
+    # DOCUMENT VERSION LIFECYCLE
+    # ============================================================
+
+    def set_document_version_status(
+        self,
+        *,
+        document_id: uuid.UUID,
+        document_version_id: uuid.UUID,
+        tenant_id: str,
+        status: str,
+    ) -> None:
+        self.vector_store.set_document_version_status(
+            document_id=str(document_id),
+            document_version_id=str(document_version_id),
+            tenant_id=tenant_id,
+            status=status,
+        )
+
+    async def aset_document_version_status(
+        self,
+        *,
+        document_id: uuid.UUID,
+        document_version_id: uuid.UUID,
+        tenant_id: str,
+        status: str,
+    ) -> None:
+        await self.vector_store.aset_document_version_status(
+            document_id=str(document_id),
+            document_version_id=str(document_version_id),
+            tenant_id=tenant_id,
+            status=status,
+        )
+
+    def promote_document_version(
+        self,
+        *,
+        document_id: uuid.UUID,
+        document_version_id: uuid.UUID,
+        previous_active_version_id: uuid.UUID | None,
+        tenant_id: str,
+    ) -> None:
+        self.vector_store.promote_document_version(
+            document_id=str(document_id),
+            document_version_id=str(document_version_id),
+            previous_active_version_id=(
+                str(previous_active_version_id)
+                if previous_active_version_id
+                else None
+            ),
+            tenant_id=tenant_id,
+        )
+
+    async def apromote_document_version(
+        self,
+        *,
+        document_id: uuid.UUID,
+        document_version_id: uuid.UUID,
+        previous_active_version_id: uuid.UUID | None,
+        tenant_id: str,
+    ) -> None:
+        await self.vector_store.apromote_document_version(
+            document_id=str(document_id),
+            document_version_id=str(document_version_id),
+            previous_active_version_id=(
+                str(previous_active_version_id)
+                if previous_active_version_id
+                else None
+            ),
+            tenant_id=tenant_id,
+        )
+
+    # ============================================================
     # METADATA ENRICHMENT
     # ============================================================
 
@@ -328,6 +404,7 @@ class DocumentIngestionService:
     def _enrich_metadata(
         chunks: list[DocumentChunk],
         document_version_id: uuid.UUID,
+        version_number: int,
         categories: list[str],
         tags: list[str],
     ) -> None:
@@ -355,6 +432,14 @@ class DocumentIngestionService:
             chunk.metadata["document_version_id"] = (
                 str(document_version_id)
             )
+
+            # Business version (1, 2, 3...) persisted to Qdrant
+            # as `version_number`.
+            chunk.metadata["version_number"] = (
+                version_number
+            )
+
+            chunk.metadata["version_status"] = "PENDING"
 
     # ============================================================
     # BUILD EMBEDDED CHUNKS

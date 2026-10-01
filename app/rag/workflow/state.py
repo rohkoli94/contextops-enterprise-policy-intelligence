@@ -67,6 +67,7 @@ class QueryState(TypedDict, total=False):
     # ==========================================
     # Cache
     # ==========================================
+    knowledge_base_version: str | None
     cache_key: str | None
     cache_hit: bool
     cached_response: dict[str, Any] | None

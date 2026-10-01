@@ -7,20 +7,9 @@ from app.services.cache_provider import (
 
 
 class NoOpCacheProvider(CacheProvider):
-    """
-    Day 18 cache implementation.
+    """Cache implementation that always returns a miss."""
 
-    Always returns a cache miss.
-
-    This provides a valid application implementation while
-    keeping Redis-specific infrastructure for the later
-    production cache implementation.
-    """
-
-    async def get(
-        self,
-        key: str,
-    ) -> CacheEntry | None:
+    async def get(self, key: str) -> CacheEntry | None:
         return None
 
     async def set(
@@ -32,8 +21,11 @@ class NoOpCacheProvider(CacheProvider):
     ) -> None:
         return None
 
-    async def delete(
-        self,
-        key: str,
-    ) -> None:
+    async def delete(self, key: str) -> None:
         return None
+
+    async def get_knowledge_base_version(self, tenant_id: str) -> str:
+        return "0"
+
+    async def bump_knowledge_base_version(self, tenant_id: str) -> str:
+        return "0"

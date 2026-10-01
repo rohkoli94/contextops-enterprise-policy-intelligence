@@ -95,7 +95,7 @@ class QueryService:
         """
 
         # =====================================================
-        # STEP 1 â€” INPUT VALIDATION
+        # STEP 1 Ã¢â‚¬â€ INPUT VALIDATION
         # =====================================================
 
         if not isinstance(question, str):
@@ -119,7 +119,7 @@ class QueryService:
             )
 
         # =====================================================
-        # STEP 2 â€” NORMALIZE
+        # STEP 2 Ã¢â‚¬â€ NORMALIZE
         # =====================================================
 
         normalized_question = (
@@ -131,7 +131,7 @@ class QueryService:
         )
 
         # =====================================================
-        # STEP 3 â€” CONVERSATION
+        # STEP 3 Ã¢â‚¬â€ CONVERSATION
         # =====================================================
 
         if conversation_id:
@@ -159,7 +159,7 @@ class QueryService:
         )
 
         # =====================================================
-        # STEP 4 â€” SAVE USER MESSAGE
+        # STEP 4 Ã¢â‚¬â€ SAVE USER MESSAGE
         # =====================================================
 
         user_message = ConversationMessage(
@@ -182,7 +182,7 @@ class QueryService:
         )
 
         # =====================================================
-        # STEP 5 â€” NORMALIZE FILTERS
+        # STEP 5 Ã¢â‚¬â€ NORMALIZE FILTERS
         # =====================================================
 
         retrieval_filters = (
@@ -194,7 +194,7 @@ class QueryService:
         )
 
         # =====================================================
-        # STEP 6 â€” TRACE ID
+        # STEP 6 Ã¢â‚¬â€ TRACE ID
         # =====================================================
 
         trace_run_id = uuid4()
@@ -214,7 +214,7 @@ class QueryService:
             langfuse_handler = CallbackHandler()
 
         # =====================================================
-        # STEP 7 â€” INITIAL STATE
+        # STEP 7 Ã¢â‚¬â€ INITIAL STATE
         # =====================================================
 
         initial_state: QueryState = {
@@ -232,7 +232,7 @@ class QueryService:
         }
 
         # =====================================================
-        # STEP 8 â€” LANGFUSE
+        # STEP 8 Ã¢â‚¬â€ LANGFUSE
         # =====================================================
 
         trace_tags = [
@@ -260,7 +260,7 @@ class QueryService:
         try:
 
             # =================================================
-            # STEP 9 â€” LANGGRAPH
+            # STEP 9 Ã¢â‚¬â€ LANGGRAPH
             # =================================================
 
             if langfuse_handler is not None:
@@ -310,7 +310,7 @@ class QueryService:
                 )
 
             # =================================================
-            # STEP 10 â€” TOTAL TIME
+            # STEP 10 Ã¢â‚¬â€ TOTAL TIME
             # =================================================
 
             duration_ms = (
@@ -323,7 +323,7 @@ class QueryService:
             )
 
             # =================================================
-            # STEP 11 â€” TRACE ID
+            # STEP 11 Ã¢â‚¬â€ TRACE ID
             # =================================================
 
             result = {
@@ -335,7 +335,7 @@ class QueryService:
             }
 
             # =================================================
-            # STEP 12 â€” SAVE ASSISTANT MESSAGE
+            # STEP 12 Ã¢â‚¬â€ SAVE ASSISTANT MESSAGE
             # =================================================
 
             answer = str(
@@ -376,7 +376,7 @@ class QueryService:
                 )
 
                 # =============================================
-                # STEP 13 â€” UPDATE SUMMARY
+                # STEP 13 Ã¢â‚¬â€ UPDATE SUMMARY
                 # =============================================
 
                 await self._update_conversation_summary(
@@ -394,7 +394,7 @@ class QueryService:
             )
 
             # =================================================
-            # STEP 14 â€” LOGGING
+            # STEP 14 Ã¢â‚¬â€ LOGGING
             # =================================================
 
             logger.info(
@@ -647,4 +647,3 @@ Updated conversation summary:
                         "resource: %r",
                         resource,
                     )
-

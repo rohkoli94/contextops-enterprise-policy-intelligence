@@ -22,23 +22,23 @@ class HybridRetriever(RetrievalProvider):
     Flow:
 
         User Query
-            ↓
-        ┌──────────────────────────┐
-        │                          │
-        ↓                          ↓
+            â†“
+        â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+        â”‚                          â”‚
+        â†“                          â†“
     Dense Provider          Sparse BM25 Provider
-        ↓                          ↓
+        â†“                          â†“
     Dense Query              Sparse Query
-        └────────────┬─────────────┘
-                     ↓
+        â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                     â†“
              VectorStore.asearch_hybrid()
-                     ↓
+                     â†“
                   Qdrant
-                     ↓
+                     â†“
              Dense + BM25 Search
-                     ↓
+                     â†“
                     RRF
-                     ↓
+                     â†“
              RetrievedChunk[]
     """
 
@@ -119,7 +119,7 @@ class HybridRetriever(RetrievalProvider):
         """
 
         # ----------------------------------------------------
-        # STEP 1 — GENERATE DENSE QUERY
+        # STEP 1 â€” GENERATE DENSE QUERY
         # ----------------------------------------------------
 
         embedding_response = (
@@ -135,7 +135,7 @@ class HybridRetriever(RetrievalProvider):
         )
 
         # ----------------------------------------------------
-        # STEP 2 — GENERATE BM25 SPARSE QUERY
+        # STEP 2 â€” GENERATE BM25 SPARSE QUERY
         # ----------------------------------------------------
 
         sparse_query = (
@@ -145,7 +145,7 @@ class HybridRetriever(RetrievalProvider):
         )
 
         # ----------------------------------------------------
-        # STEP 3 — HYBRID SEARCH
+        # STEP 3 â€” HYBRID SEARCH
         # ----------------------------------------------------
 
         return await self.vector_store.asearch_hybrid(

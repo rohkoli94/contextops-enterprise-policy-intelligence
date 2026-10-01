@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from app.evaluation.llm_judge import (
     LLMJudgeResult,

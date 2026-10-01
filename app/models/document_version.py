@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -30,7 +32,15 @@ class DocumentVersion(Base):
             "content_hash",
             name="uq_document_content_hash",
         ),
+        Index(
+            "ix_document_versions_status",
+            "status",
+        ),
     )
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("status", "PENDING")
+        super().__init__(**kwargs)
 
     document_version_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -40,8 +50,13 @@ class DocumentVersion(Base):
 
     document_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("documents.document_id"),
+        ForeignKey(
+            "documents.document_id",
+            name="fk_document_versions_document_id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
+        index=True,
     )
 
     version: Mapped[int] = mapped_column(
@@ -74,6 +89,19 @@ class DocumentVersion(Base):
         nullable=False,
     )
 
+    # Lifecycle:
+    #
+    # PENDING -> PROCESSING -> ACTIVE
+    #                       -> FAILED
+    #
+    # ACTIVE -> SUPERSEDED
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="PENDING",
+        server_default="PENDING",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -82,4 +110,5 @@ class DocumentVersion(Base):
 
     document: Mapped["Document"] = relationship(
         back_populates="versions",
+        foreign_keys=[document_id],
     )

@@ -8,27 +8,24 @@ def build_query_cache_key(
     tenant_id: str,
     query: str,
     filters: dict[str, Any] | None,
-    knowledge_base_version: str = "current",
+    knowledge_base_version: str = "0",
     prompt_version: str = "v1",
     model_version: str = "current",
 ) -> str:
     """
-    Build a deterministic, version-aware cache key.
+    Build a deterministic cache key that includes all inputs that
+    can change the generated answer.
 
-    Day 18:
-        knowledge_base_version/prompt/model values are supported
-        structurally.
-
-    Day 21:
-        these values will be populated from the real KB/version
-        and cache configuration.
+    knowledge_base_version is the tenant-scoped Redis generation.
+    Any successful knowledge-base update moves queries to a new
+    cache namespace without scanning or deleting old entries.
     """
 
     payload = {
-        "tenant_id": tenant_id,
+        "tenant_id": tenant_id.strip(),
         "query": query.strip(),
         "filters": filters or {},
-        "knowledge_base_version": knowledge_base_version,
+        "knowledge_base_version": str(knowledge_base_version),
         "prompt_version": prompt_version,
         "model_version": model_version,
     }

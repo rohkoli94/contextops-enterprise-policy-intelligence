@@ -7,6 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, selectinload
 
+from app.config.settings import settings
+from app.core.logging import get_logger
 from app.db.session import AsyncSessionLocal
 from app.api.v1.documents.schemas.document_list_response import (
     DocumentListItem,
@@ -23,7 +25,11 @@ from app.providers.storage.base import StorageProvider
 from app.services.document_ingestion_service import (
     DocumentIngestionService,
 )
+from app.services.redis_cache import RedisCacheProvider
 from app.utils.hashing import calculate_stream_hash
+
+
+logger = get_logger(__name__)
 
 
 class DocumentService:
@@ -65,7 +71,8 @@ class DocumentService:
             document_id=document_id,
             document_name=document_name,
             current_version=0,
-            status="PROCESSING",
+            active_version_id=None,
+            status="QUEUED",
         )
 
         self.db.add(document)
@@ -120,7 +127,8 @@ class DocumentService:
             document_id=document_id,
             document_name=document_name,
             current_version=0,
-            status="PROCESSING",
+            active_version_id=None,
+            status="QUEUED",
         )
 
         self.db.add(document)
@@ -235,6 +243,7 @@ class DocumentService:
             .options(
                 selectinload(Document.categories),
                 selectinload(Document.tags),
+                selectinload(Document.active_version),
             )
             .where(
                 Document.document_id == document_id
@@ -329,11 +338,13 @@ class DocumentService:
                 file_size=file_size,
                 content_hash=content_hash,
                 blob_path=stored_blob_path,
+                status="PENDING",
             )
 
             self.db.add(document_version)
 
             document.current_version = version
+            document.status = "QUEUED"
 
             self.db.commit()
 
@@ -347,13 +358,74 @@ class DocumentService:
                 for tag in document.tags
             ]
 
-            self.document_ingestion_service.ingest(
+            document_version.status = "PROCESSING"
+            document.status = "PROCESSING"
+            self.db.commit()
+
+            embedded_chunks = self.document_ingestion_service.ingest(
                 document=document,
                 blob_path=stored_blob_path,
                 file_name=file_name,
                 document_version_id=document_version_id,
+                version_number=version,
                 categories=categories,
                 tags=tags,
+            )
+
+            if not embedded_chunks:
+                raise ValueError(
+                    "Document ingestion produced no searchable chunks."
+                )
+
+            # Advance the Redis generation BEFORE promotion. This
+            # makes old query-cache entries unreachable without
+            # requiring a Redis key scan. If invalidation fails,
+            # the new version is never promoted.
+            asyncio.run(
+                self._bump_knowledge_base_cache_version()
+            )
+
+            previous_active_version_id = (
+                document.active_version_id
+            )
+
+            self.document_ingestion_service.promote_document_version(
+                document_id=document.document_id,
+                document_version_id=document_version_id,
+                previous_active_version_id=previous_active_version_id,
+                tenant_id=settings.default_tenant_id,
+            )
+
+            if previous_active_version_id:
+                previous_version = (
+                    self.db.query(DocumentVersion)
+                    .filter(
+                        DocumentVersion.document_version_id
+                        == previous_active_version_id
+                    )
+                    .first()
+                )
+                if previous_version is not None:
+                    previous_version.status = "SUPERSEDED"
+
+            document_version.status = "ACTIVE"
+            document.active_version_id = document_version_id
+            document.status = "INDEXED"
+
+            self.db.commit()
+
+            logger.info(
+                "Activated document version synchronously",
+                extra={
+                    "document_id": str(document.document_id),
+                    "document_version_id": str(document_version_id),
+                    "version": version,
+                    "previous_active_version_id": (
+                        str(previous_active_version_id)
+                        if previous_active_version_id
+                        else None
+                    ),
+                },
             )
 
             return DocumentUploadResponse(
@@ -361,11 +433,49 @@ class DocumentService:
                 document_version_id=document_version_id,
                 document_name=document.document_name,
                 version=version,
+                active_version=version,
                 status=document.status,
             )
 
         except Exception:
             self.db.rollback()
+
+            try:
+                failed_version = (
+                    self.db.query(DocumentVersion)
+                    .filter(
+                        DocumentVersion.document_version_id
+                        == document_version_id
+                    )
+                    .first()
+                )
+                if failed_version is not None:
+                    failed_version.status = "FAILED"
+
+                latest_document = (
+                    self.db.query(Document)
+                    .filter(
+                        Document.document_id == document.document_id
+                    )
+                    .first()
+                )
+                if latest_document is not None:
+                    latest_document.status = (
+                        "INDEXED"
+                        if latest_document.active_version_id
+                        else "FAILED"
+                    )
+
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                logger.exception(
+                    "Failed to persist synchronous document version failure status",
+                    extra={
+                        "document_id": str(document.document_id),
+                        "document_version_id": str(document_version_id),
+                    },
+                )
 
             if stored_blob_path:
                 try:
@@ -373,8 +483,22 @@ class DocumentService:
                         stored_blob_path
                     )
                 except Exception:
-                    pass
+                    logger.exception(
+                        "Failed to delete failed document version blob",
+                        extra={
+                            "document_id": str(document.document_id),
+                            "document_version_id": str(document_version_id),
+                            "blob_path": stored_blob_path,
+                        },
+                    )
 
+            logger.exception(
+                "Synchronous document version upload failed",
+                extra={
+                    "document_id": str(document.document_id),
+                    "document_version_id": str(document_version_id),
+                },
+            )
             raise
 
     # ============================================================
@@ -425,6 +549,7 @@ class DocumentService:
                 file_size=file_size,
                 content_hash=content_hash,
                 blob_path=stored_blob_path,
+                status="PENDING",
             )
 
             self.db.add(document_version)
@@ -452,19 +577,74 @@ class DocumentService:
                     blob_path=stored_blob_path,
                     file_name=file_name,
                     document_version_id=document_version_id,
+                    version_number=version,
                     categories=categories,
                     tags=tags,
                 )
 
             else:
 
-                await self.document_ingestion_service.aingest(
-                    document=document,
-                    blob_path=stored_blob_path,
-                    file_name=file_name,
-                    document_version_id=document_version_id,
-                    categories=categories,
-                    tags=tags,
+                embedded_chunks = (
+                    await self.document_ingestion_service.aingest(
+                        document=document,
+                        blob_path=stored_blob_path,
+                        file_name=file_name,
+                        document_version_id=document_version_id,
+                        version_number=version,
+                        categories=categories,
+                        tags=tags,
+                    )
+                )
+
+                if not embedded_chunks:
+                    raise ValueError(
+                        "Document ingestion produced no searchable chunks."
+                    )
+
+                await self._bump_knowledge_base_cache_version()
+
+                previous_active_version_id = (
+                    document.active_version_id
+                )
+
+                await (
+                    self.document_ingestion_service
+                    .apromote_document_version(
+                        document_id=document.document_id,
+                        document_version_id=document_version_id,
+                        previous_active_version_id=(
+                            previous_active_version_id
+                        ),
+                        tenant_id=settings.default_tenant_id,
+                    )
+                )
+
+                if previous_active_version_id:
+                    previous_version = (
+                        await self.db.execute(
+                            select(DocumentVersion).where(
+                                DocumentVersion.document_version_id
+                                == previous_active_version_id
+                            )
+                        )
+                    )
+                    previous_version = previous_version.scalars().first()
+                    if previous_version is not None:
+                        previous_version.status = "SUPERSEDED"
+
+                document_version.status = "ACTIVE"
+                document.active_version_id = document_version_id
+                document.status = "INDEXED"
+
+                await self.db.commit()
+
+                logger.info(
+                    "Activated document version asynchronously",
+                    extra={
+                        "document_id": str(document.document_id),
+                        "document_version_id": str(document_version_id),
+                        "version": version,
+                    },
                 )
 
             return DocumentUploadResponse(
@@ -472,11 +652,51 @@ class DocumentService:
                 document_version_id=document_version_id,
                 document_name=document.document_name,
                 version=version,
+                active_version=(
+                    version
+                    if background_tasks is None
+                    else None
+                ),
                 status=document.status,
             )
 
         except Exception:
             await self.db.rollback()
+
+            try:
+                failure_result = await self.db.execute(
+                    select(DocumentVersion).where(
+                        DocumentVersion.document_version_id
+                        == document_version_id
+                    )
+                )
+                failed_version = failure_result.scalars().first()
+                if failed_version is not None:
+                    failed_version.status = "FAILED"
+
+                document_result = await self.db.execute(
+                    select(Document).where(
+                        Document.document_id == document.document_id
+                    )
+                )
+                latest_document = document_result.scalars().first()
+                if latest_document is not None:
+                    latest_document.status = (
+                        "INDEXED"
+                        if latest_document.active_version_id
+                        else "FAILED"
+                    )
+
+                await self.db.commit()
+            except Exception:
+                await self.db.rollback()
+                logger.exception(
+                    "Failed to persist asynchronous document version failure status",
+                    extra={
+                        "document_id": str(document.document_id),
+                        "document_version_id": str(document_version_id),
+                    },
+                )
 
             if stored_blob_path:
                 try:
@@ -484,8 +704,22 @@ class DocumentService:
                         stored_blob_path
                     )
                 except Exception:
-                    pass
+                    logger.exception(
+                        "Failed to delete failed document version blob",
+                        extra={
+                            "document_id": str(document.document_id),
+                            "document_version_id": str(document_version_id),
+                            "blob_path": stored_blob_path,
+                        },
+                    )
 
+            logger.exception(
+                "Asynchronous document version upload failed",
+                extra={
+                    "document_id": str(document.document_id),
+                    "document_version_id": str(document_version_id),
+                },
+            )
             raise
 
     # ============================================================
@@ -498,6 +732,7 @@ class DocumentService:
         blob_path: str,
         file_name: str,
         document_version_id: uuid.UUID,
+        version_number: int,
         categories: list[str],
         tags: list[str],
     ) -> None:
@@ -540,32 +775,181 @@ class DocumentService:
                 )
 
             try:
-                document.status = "PROCESSING"
+                version_result = await db.execute(
+                    select(DocumentVersion).where(
+                        DocumentVersion.document_version_id
+                        == document_version_id
+                    )
+                )
+                document_version = version_result.scalars().first()
 
+                if document_version is None:
+                    raise ValueError(
+                        f"Document version not found: {document_version_id}"
+                    )
+
+                document.status = "PROCESSING"
+                document_version.status = "PROCESSING"
                 await db.commit()
 
-                await self.document_ingestion_service.aingest(
-                    document=document,
-                    blob_path=blob_path,
-                    file_name=file_name,
-                    document_version_id=document_version_id,
-                    categories=categories,
-                    tags=tags,
+                embedded_chunks = (
+                    await self.document_ingestion_service.aingest(
+                        document=document,
+                        blob_path=blob_path,
+                        file_name=file_name,
+                        document_version_id=document_version_id,
+                        version_number=version_number,
+                        categories=categories,
+                        tags=tags,
+                    )
                 )
 
+                if not embedded_chunks:
+                    raise ValueError(
+                        "Document ingestion produced no searchable chunks."
+                    )
+
+                # Invalidate Redis before exposing the new version.
+                await self._bump_knowledge_base_cache_version()
+
+                previous_active_version_id = (
+                    document.active_version_id
+                )
+
+                await (
+                    self.document_ingestion_service
+                    .apromote_document_version(
+                        document_id=document.document_id,
+                        document_version_id=document_version_id,
+                        previous_active_version_id=(
+                            previous_active_version_id
+                        ),
+                        tenant_id=settings.default_tenant_id,
+                    )
+                )
+
+                if previous_active_version_id:
+                    previous_result = await db.execute(
+                        select(DocumentVersion).where(
+                            DocumentVersion.document_version_id
+                            == previous_active_version_id
+                        )
+                    )
+                    previous_version = (
+                        previous_result.scalars().first()
+                    )
+                    if previous_version is not None:
+                        previous_version.status = "SUPERSEDED"
+
+                document_version.status = "ACTIVE"
+                document.active_version_id = document_version_id
                 document.status = "INDEXED"
 
                 await db.commit()
 
+                logger.info(
+                    "Activated document version in background",
+                    extra={
+                        "document_id": str(document.document_id),
+                        "document_version_id": str(document_version_id),
+                        "version": document_version.version,
+                        "previous_active_version_id": (
+                            str(previous_active_version_id)
+                            if previous_active_version_id
+                            else None
+                        ),
+                    },
+                )
+
             except Exception:
-                document.status = "FAILED"
+                await db.rollback()
 
                 try:
+                    failure_result = await db.execute(
+                        select(DocumentVersion).where(
+                            DocumentVersion.document_version_id
+                            == document_version_id
+                        )
+                    )
+                    failed_version = failure_result.scalars().first()
+                    if failed_version is not None:
+                        failed_version.status = "FAILED"
+
+                    document_result = await db.execute(
+                        select(Document).where(
+                            Document.document_id == document_id
+                        )
+                    )
+                    latest_document = document_result.scalars().first()
+                    if latest_document is not None:
+                        latest_document.status = (
+                            "INDEXED"
+                            if latest_document.active_version_id
+                            else "FAILED"
+                        )
+
                     await db.commit()
+
                 except Exception:
                     await db.rollback()
+                    logger.exception(
+                        "Failed to persist document version failure status",
+                        extra={
+                            "document_id": str(document_id),
+                            "document_version_id": str(document_version_id),
+                        },
+                    )
 
+                logger.exception(
+                    "Background document version ingestion failed",
+                    extra={
+                        "document_id": str(document_id),
+                        "document_version_id": str(document_version_id),
+                    },
+                )
                 raise
+
+    # ============================================================
+    # CACHE INVALIDATION
+    # ============================================================
+
+    async def _bump_knowledge_base_cache_version(
+        self,
+    ) -> str:
+        """Advance the default tenant's Redis knowledge-base generation."""
+
+        tenant_id = settings.default_tenant_id
+        cache_provider = RedisCacheProvider(
+            redis_url=settings.redis_url,
+            key_prefix=settings.redis_cache_key_prefix,
+        )
+
+        try:
+            knowledge_base_version = (
+                await cache_provider.bump_knowledge_base_version(
+                    tenant_id
+                )
+            )
+
+            logger.info(
+                "Advanced knowledge-base cache generation before document promotion",
+                extra={
+                    "tenant_id": tenant_id,
+                    "knowledge_base_version": knowledge_base_version,
+                },
+            )
+
+            return knowledge_base_version
+
+        except Exception:
+            logger.exception(
+                "Failed to advance knowledge-base cache generation",
+                extra={"tenant_id": tenant_id},
+            )
+            raise
+
+        finally:
+            await cache_provider.close()
 
     # ============================================================
     # CATEGORIES
@@ -726,6 +1110,7 @@ class DocumentService:
             .options(
                 selectinload(Document.categories),
                 selectinload(Document.tags),
+                selectinload(Document.active_version),
             )
             .filter(
                 Document.deleted_at.is_(None)
@@ -742,6 +1127,11 @@ class DocumentService:
                     document_id=document.document_id,
                     document_name=document.document_name,
                     current_version=document.current_version,
+                    active_version=(
+                        document.active_version.version
+                        if document.active_version is not None
+                        else None
+                    ),
                     status=document.status,
                     categories=[
                         category.name
@@ -774,6 +1164,7 @@ class DocumentService:
             .options(
                 selectinload(Document.categories),
                 selectinload(Document.tags),
+                selectinload(Document.active_version),
             )
             .where(
                 Document.deleted_at.is_(None)
@@ -791,6 +1182,11 @@ class DocumentService:
                     document_id=document.document_id,
                     document_name=document.document_name,
                     current_version=document.current_version,
+                    active_version=(
+                        document.active_version.version
+                        if document.active_version is not None
+                        else None
+                    ),
                     status=document.status,
                     categories=[
                         category.name

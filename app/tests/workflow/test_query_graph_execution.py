@@ -238,6 +238,12 @@ class FakeQueryRewriter:
 
 
 class FakeCacheProvider:
+    async def get_knowledge_base_version(
+        self,
+        tenant_id: str,
+    ) -> str:
+        return "0"
+
     async def get(
         self,
         key: str,

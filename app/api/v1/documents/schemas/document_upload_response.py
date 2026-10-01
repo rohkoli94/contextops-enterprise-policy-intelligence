@@ -8,4 +8,5 @@ class DocumentUploadResponse(BaseModel):
     document_version_id: uuid.UUID
     document_name: str
     version: int
+    active_version: int | None = None
     status: str

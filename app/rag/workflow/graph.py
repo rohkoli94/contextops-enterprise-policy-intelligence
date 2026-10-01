@@ -469,7 +469,7 @@ def create_query_graph(
     )
 
     # --------------------------------------------------------
-    # START → INPUT VALIDATION
+    # START  INPUT VALIDATION
     # --------------------------------------------------------
 
     builder.add_edge(
@@ -566,7 +566,7 @@ def create_query_graph(
     )
 
     # --------------------------------------------------------
-    # CONTEXT → LLM
+    # CONTEXT  LLM
     # --------------------------------------------------------
 
     builder.add_edge(
@@ -580,7 +580,7 @@ def create_query_graph(
     )
 
     # --------------------------------------------------------
-    # GROUNDING → CACHE STORE
+    # GROUNDING  CACHE STORE
     # --------------------------------------------------------
 
     builder.add_edge(
@@ -589,7 +589,7 @@ def create_query_graph(
     )
 
     # --------------------------------------------------------
-    # CACHE STORE → RESPONSE
+    # CACHE STORE  RESPONSE
     # --------------------------------------------------------
 
     builder.add_edge(
@@ -598,7 +598,7 @@ def create_query_graph(
     )
 
     # --------------------------------------------------------
-    # RESPONSE → END
+    # RESPONSE  END
     # --------------------------------------------------------
 
     builder.add_edge(

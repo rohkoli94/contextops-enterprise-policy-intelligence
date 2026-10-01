@@ -8,6 +8,7 @@ from qdrant_client import (
 from qdrant_client.http.exceptions import UnexpectedResponse
 
 from app.config.settings import settings
+from app.core.logging import get_logger
 from app.domain.document_chunk import DocumentChunk
 from app.domain.embedded_document_chunk import (
     EmbeddedDocumentChunk,
@@ -15,6 +16,9 @@ from app.domain.embedded_document_chunk import (
 from app.domain.sparse_embedding import SparseEmbedding
 from app.providers.vector_store.base import VectorStore
 from app.rag.retrieval.models import RetrievedChunk
+
+
+logger = get_logger(__name__)
 
 
 class QdrantVectorStore(VectorStore):
@@ -100,12 +104,12 @@ class QdrantVectorStore(VectorStore):
             settings.qdrant_collection_name
         )
 
-        if self.client.collection_exists(
+        collection_exists = self.client.collection_exists(
             collection_name=collection_name,
-        ):
-            return
+        )
 
-        self.client.create_collection(
+        if not collection_exists:
+            self.client.create_collection(
             collection_name=collection_name,
 
             # ----------------------------------------------------
@@ -142,7 +146,16 @@ class QdrantVectorStore(VectorStore):
             ),
         )
 
-        self.ensure_payload_indexes()
+        if collection_exists:
+            # Existing collections already have the original metadata
+            # indexes. Only the version-status index is new for this
+            # lifecycle upgrade. The helper tolerates an index created
+            # by another startup process.
+            self._ensure_payload_index(
+                field_name="version_status",
+            )
+        else:
+            self.ensure_payload_indexes()
 
         self.ensure_shard_key(
             settings.qdrant_default_shard_key
@@ -167,6 +180,7 @@ class QdrantVectorStore(VectorStore):
             categories
             tags
             content_type
+            version_status
         """
 
         collection_name = (
@@ -248,15 +262,41 @@ class QdrantVectorStore(VectorStore):
         # CONTENT TYPE
         # --------------------------------------------------------
 
-        self.client.create_payload_index(
-            collection_name=collection_name,
+        self._ensure_payload_index(
             field_name="content_type",
-            field_schema=(
-                models.KeywordIndexParams(
-                    type=models.KeywordIndexType.KEYWORD,
-                )
-            ),
         )
+
+        # --------------------------------------------------------
+        # VERSION STATUS
+        # --------------------------------------------------------
+
+        self._ensure_payload_index(
+            field_name="version_status",
+        )
+
+    def _ensure_payload_index(
+        self,
+        *,
+        field_name: str,
+    ) -> None:
+        """Create a keyword index and tolerate an existing index."""
+
+        collection_name = settings.qdrant_collection_name
+
+        try:
+            self.client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field_name,
+                field_schema=(
+                    models.KeywordIndexParams(
+                        type=models.KeywordIndexType.KEYWORD,
+                    )
+                ),
+            )
+        except UnexpectedResponse as exc:
+            if "already exists" in str(exc).lower():
+                return
+            raise
 
     # ============================================================
     # SHARD MANAGEMENT
@@ -745,6 +785,17 @@ class QdrantVectorStore(VectorStore):
             )
         )
 
+        # Hard correctness boundary: only the currently active
+        # document version may participate in user retrieval.
+        conditions.append(
+            models.FieldCondition(
+                key="version_status",
+                match=models.MatchValue(
+                    value="ACTIVE",
+                ),
+            )
+        )
+
         if filters:
 
             allowed_fields = {
@@ -905,6 +956,10 @@ class QdrantVectorStore(VectorStore):
                     "page_numbers",
                     [],
                 ),
+                "version_status": payload.get(
+                    "version_status",
+                    "PENDING",
+                ),
             },
         )
 
@@ -975,6 +1030,11 @@ class QdrantVectorStore(VectorStore):
                 "tags",
                 [],
             ),
+
+            "version_status": metadata.get(
+                "version_status",
+                "PENDING",
+            ),
         }
 
         sparse_vector = models.SparseVector(
@@ -999,6 +1059,177 @@ class QdrantVectorStore(VectorStore):
                 "bm25": sparse_vector,
             },
             payload=payload,
+        )
+
+    # ============================================================
+    # DOCUMENT VERSION LIFECYCLE
+    # ============================================================
+
+    @staticmethod
+    def _build_document_version_filter(
+        *,
+        tenant_id: str,
+        document_id: str,
+        document_version_id: str,
+    ) -> models.Filter:
+        return models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id",
+                    match=models.MatchValue(value=tenant_id),
+                ),
+                models.FieldCondition(
+                    key="document_id",
+                    match=models.MatchValue(value=document_id),
+                ),
+                models.FieldCondition(
+                    key="document_version_id",
+                    match=models.MatchValue(value=document_version_id),
+                ),
+            ]
+        )
+
+    def set_document_version_status(
+        self,
+        *,
+        document_id: str,
+        document_version_id: str,
+        tenant_id: str,
+        status: str,
+    ) -> None:
+        """Set version lifecycle payload for all chunks of a version."""
+
+        if not status or not status.strip():
+            raise ValueError("status must not be empty.")
+
+        query_filter = self._build_document_version_filter(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            document_version_id=document_version_id,
+        )
+
+        self.client.set_payload(
+            collection_name=settings.qdrant_collection_name,
+            payload={"version_status": status},
+            points=query_filter,
+            shard_key_selector=self.get_shard_selector(tenant_id),
+            wait=True,
+        )
+
+        logger.info(
+            "Updated Qdrant document version status",
+            extra={
+                "tenant_id": tenant_id,
+                "document_id": document_id,
+                "document_version_id": document_version_id,
+                "version_status": status,
+            },
+        )
+
+    async def aset_document_version_status(
+        self,
+        *,
+        document_id: str,
+        document_version_id: str,
+        tenant_id: str,
+        status: str,
+    ) -> None:
+        """Async Qdrant document version status update."""
+
+        query_filter = self._build_document_version_filter(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            document_version_id=document_version_id,
+        )
+
+        await self.async_client.set_payload(
+            collection_name=settings.qdrant_collection_name,
+            payload={"version_status": status},
+            points=query_filter,
+            shard_key_selector=self.get_shard_selector(tenant_id),
+            wait=True,
+        )
+
+        logger.info(
+            "Updated Qdrant document version status asynchronously",
+            extra={
+                "tenant_id": tenant_id,
+                "document_id": document_id,
+                "document_version_id": document_version_id,
+                "version_status": status,
+            },
+        )
+
+    def promote_document_version(
+        self,
+        *,
+        document_id: str,
+        document_version_id: str,
+        previous_active_version_id: str | None,
+        tenant_id: str,
+    ) -> None:
+        """Promote a new version and supersede the previous active version."""
+
+        # New version first keeps the corpus queryable during the small
+        # transition window; old version is immediately retired after.
+        self.set_document_version_status(
+            document_id=document_id,
+            document_version_id=document_version_id,
+            tenant_id=tenant_id,
+            status="ACTIVE",
+        )
+
+        if previous_active_version_id:
+            self.set_document_version_status(
+                document_id=document_id,
+                document_version_id=previous_active_version_id,
+                tenant_id=tenant_id,
+                status="SUPERSEDED",
+            )
+
+        logger.info(
+            "Promoted Qdrant document version",
+            extra={
+                "tenant_id": tenant_id,
+                "document_id": document_id,
+                "document_version_id": document_version_id,
+                "previous_active_version_id": previous_active_version_id,
+            },
+        )
+
+    async def apromote_document_version(
+        self,
+        *,
+        document_id: str,
+        document_version_id: str,
+        previous_active_version_id: str | None,
+        tenant_id: str,
+    ) -> None:
+        """Async promotion of a document version in Qdrant."""
+
+        await self.aset_document_version_status(
+            document_id=document_id,
+            document_version_id=document_version_id,
+            tenant_id=tenant_id,
+            status="ACTIVE",
+        )
+
+        if previous_active_version_id:
+            await self.aset_document_version_status(
+                document_id=document_id,
+                document_version_id=previous_active_version_id,
+                tenant_id=tenant_id,
+                status="SUPERSEDED",
+            )
+
+        logger.info(
+            "Promoted Qdrant document version asynchronously",
+            extra={
+                "tenant_id": tenant_id,
+                "document_id": document_id,
+                "document_version_id": document_version_id,
+                "previous_active_version_id": previous_active_version_id,
+            },
         )
 
     # ============================================================
@@ -1027,7 +1258,7 @@ class QdrantVectorStore(VectorStore):
         )
 
     # ============================================================
-    # VALIDATION — DENSE
+    # VALIDATION Ã¢â‚¬â€ DENSE
     # ============================================================
 
     @staticmethod
@@ -1056,7 +1287,7 @@ class QdrantVectorStore(VectorStore):
             )
 
     # ============================================================
-    # VALIDATION — SPARSE
+    # VALIDATION Ã¢â‚¬â€ SPARSE
     # ============================================================
 
     @staticmethod
@@ -1118,7 +1349,7 @@ class QdrantVectorStore(VectorStore):
 
 
 # ================================================================
-# ROHIT NOTES — INTERVIEW / CODE FLOW
+# ROHIT NOTES Ã¢â‚¬â€ INTERVIEW / CODE FLOW
 # ================================================================
 
 # Shard routing
@@ -1137,39 +1368,39 @@ class QdrantVectorStore(VectorStore):
 # Dense:
 #
 # Query
-#   ↓
+#   Ã¢â€ â€œ
 # Dense embedding
-#   ↓
+#   Ã¢â€ â€œ
 # asearch_dense()
-#   ↓
+#   Ã¢â€ â€œ
 # Qdrant dense ANN
-#   ↓
+#   Ã¢â€ â€œ
 # RetrievedChunk[]
 
 
 # Sparse:
 #
 # Query
-#   ↓
+#   Ã¢â€ â€œ
 # BM25 sparse representation
-#   ↓
+#   Ã¢â€ â€œ
 # asearch_sparse()
-#   ↓
+#   Ã¢â€ â€œ
 # Qdrant BM25
-#   ↓
+#   Ã¢â€ â€œ
 # RetrievedChunk[]
 
 
 # Hybrid:
 #
 # Query
-#   ├── Dense embedding
-#   └── BM25 sparse representation
-#             ↓
+#   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Dense embedding
+#   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ BM25 sparse representation
+#             Ã¢â€ â€œ
 #        Qdrant hybrid
-#             ↓
+#             Ã¢â€ â€œ
 #             RRF
-#             ↓
+#             Ã¢â€ â€œ
 #      RetrievedChunk[]
 
 
@@ -1178,21 +1409,21 @@ class QdrantVectorStore(VectorStore):
 # ================================================================
 
 # Document
-#   ↓
+#   Ã¢â€ â€œ
 # Extraction
-#   ↓
+#   Ã¢â€ â€œ
 # Chunking
-#   ↓
+#   Ã¢â€ â€œ
 # Dense embedding
 #   +
 # Sparse BM25 embedding
-#   ↓
+#   Ã¢â€ â€œ
 # EmbeddedDocumentChunk[]
-#   ↓
+#   Ã¢â€ â€œ
 # aupsert()
-#   ↓
+#   Ã¢â€ â€œ
 # AsyncQdrantClient
-#   ↓
+#   Ã¢â€ â€œ
 # Qdrant
 
 
@@ -1216,14 +1447,14 @@ class QdrantVectorStore(VectorStore):
 # Synchronous compatibility path:
 #
 # upsert()
-#   ↓
+#   Ã¢â€ â€œ
 # QdrantClient
 #
 #
 # Asynchronous production path:
 #
 # aupsert()
-#   ↓
+#   Ã¢â€ â€œ
 # AsyncQdrantClient
 #
 #
@@ -1232,7 +1463,7 @@ class QdrantVectorStore(VectorStore):
 # asearch_dense()
 # asearch_sparse()
 # asearch_hybrid()
-#   ↓
+#   Ã¢â€ â€œ
 # AsyncQdrantClient
 #
 #

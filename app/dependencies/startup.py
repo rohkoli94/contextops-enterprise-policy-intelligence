@@ -36,7 +36,7 @@ def initialize_rag() -> None:
     """
 
     # --------------------------------------------------------
-    # STEP 1 — DENSE EMBEDDING PROVIDER
+    # STEP 1 â€” DENSE EMBEDDING PROVIDER
     # --------------------------------------------------------
 
     embedding_provider = (
@@ -44,7 +44,7 @@ def initialize_rag() -> None:
     )
 
     # --------------------------------------------------------
-    # STEP 2 — VECTOR DIMENSION
+    # STEP 2 â€” VECTOR DIMENSION
     # --------------------------------------------------------
 
     vector_size = (
@@ -52,25 +52,25 @@ def initialize_rag() -> None:
     )
 
     # --------------------------------------------------------
-    # STEP 3 — SPARSE EMBEDDING PROVIDER
+    # STEP 3 â€” SPARSE EMBEDDING PROVIDER
     # --------------------------------------------------------
 
     get_sparse_embedding_provider()
 
     # --------------------------------------------------------
-    # STEP 4 — HYBRID RETRIEVER
+    # STEP 4 â€” HYBRID RETRIEVER
     # --------------------------------------------------------
 
     get_hybrid_retriever()
 
     # --------------------------------------------------------
-    # STEP 5 — VECTOR STORE
+    # STEP 5 â€” VECTOR STORE
     # --------------------------------------------------------
 
     vector_store = get_vector_store()
 
     # --------------------------------------------------------
-    # STEP 6 — QDRANT COLLECTION
+    # STEP 6 â€” QDRANT COLLECTION
     # --------------------------------------------------------
 
     vector_store.ensure_collection(
@@ -78,7 +78,7 @@ def initialize_rag() -> None:
     )
 
     # --------------------------------------------------------
-    # STEP 7 — DEFAULT QDRANT SHARD KEY
+    # STEP 7 â€” DEFAULT QDRANT SHARD KEY
     # --------------------------------------------------------
     #
     # The application uses ShardKeyWithFallback:
@@ -116,20 +116,20 @@ def initialize_application(
     """
 
     # --------------------------------------------------------
-    # STEP 1 — LANGFUSE TRACING
+    # STEP 1 â€” LANGFUSE TRACING
     # --------------------------------------------------------
     #
 
     configure_langfuse()
 
     # --------------------------------------------------------
-    # STEP 2 — RAG INFRASTRUCTURE
+    # STEP 2 â€” RAG INFRASTRUCTURE
     # --------------------------------------------------------
 
     initialize_rag()
 
     # --------------------------------------------------------
-    # STEP 3 — QUERY SERVICE
+    # STEP 3 â€” QUERY SERVICE
     # --------------------------------------------------------
     #
     # create_query_service() performs complete composition:
@@ -144,9 +144,9 @@ def initialize_application(
     #   Reranker
     #   Retrieval Validator
     #   Grounding Validator
-    #           ↓
+    #           â†“
     #      LangGraph
-    #           ↓
+    #           â†“
     #      QueryService
     #
     # Everything is created once during application startup.

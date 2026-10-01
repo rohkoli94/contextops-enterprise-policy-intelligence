@@ -92,6 +92,66 @@ class VectorStore(ABC):
         )
 
     # ========================================================
+    # DOCUMENT VERSION LIFECYCLE
+    # ========================================================
+
+    def set_document_version_status(
+        self,
+        *,
+        document_id: str,
+        document_version_id: str,
+        tenant_id: str,
+        status: str,
+    ) -> None:
+        """Update the lifecycle status payload for one document version."""
+        raise NotImplementedError
+
+    async def aset_document_version_status(
+        self,
+        *,
+        document_id: str,
+        document_version_id: str,
+        tenant_id: str,
+        status: str,
+    ) -> None:
+        """Async wrapper for document-version status update."""
+        await asyncio.to_thread(
+            self.set_document_version_status,
+            document_id=document_id,
+            document_version_id=document_version_id,
+            tenant_id=tenant_id,
+            status=status,
+        )
+
+    def promote_document_version(
+        self,
+        *,
+        document_id: str,
+        document_version_id: str,
+        previous_active_version_id: str | None,
+        tenant_id: str,
+    ) -> None:
+        """Promote a fully indexed version and retire the previous one."""
+        raise NotImplementedError
+
+    async def apromote_document_version(
+        self,
+        *,
+        document_id: str,
+        document_version_id: str,
+        previous_active_version_id: str | None,
+        tenant_id: str,
+    ) -> None:
+        """Async wrapper for document-version promotion."""
+        await asyncio.to_thread(
+            self.promote_document_version,
+            document_id=document_id,
+            document_version_id=document_version_id,
+            previous_active_version_id=previous_active_version_id,
+            tenant_id=tenant_id,
+        )
+
+    # ========================================================
     # DENSE SEARCH
     # ========================================================
 
@@ -146,9 +206,9 @@ class VectorStore(ABC):
             Dense retrieval
                     +
             Sparse/BM25 retrieval
-                    ↓
+                    Ã¢â€ â€œ
                  Fusion
-                    ↓
+                    Ã¢â€ â€œ
              Final ranked results
         """
         raise NotImplementedError

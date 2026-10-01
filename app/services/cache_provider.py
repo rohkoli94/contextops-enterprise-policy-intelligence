@@ -5,12 +5,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class CacheEntry:
-    """
-    Cached query response.
-
-    The payload is intentionally generic because different cache
-    implementations may store different response representations.
-    """
+    """A cached application response."""
 
     value: dict[str, Any]
     cache_key: str
@@ -20,11 +15,12 @@ class CacheProvider(ABC):
     """
     Application-level cache abstraction.
 
-    Production implementation will be backed by Redis.
+    Cache is an optimization and must never be a correctness
+    dependency for the RAG workflow.
 
-    The workflow must continue to work when cache is unavailable;
-    caching is an optimization and must not become a correctness
-    dependency.
+    The two knowledge-base generation methods are intentionally
+    concrete defaults so existing test doubles and non-Redis cache
+    implementations remain source-compatible.
     """
 
     @abstractmethod
@@ -50,3 +46,17 @@ class CacheProvider(ABC):
         key: str,
     ) -> None:
         raise NotImplementedError
+
+    async def get_knowledge_base_version(
+        self,
+        tenant_id: str,
+    ) -> str:
+        """Return the default generation for non-persistent caches."""
+        return "0"
+
+    async def bump_knowledge_base_version(
+        self,
+        tenant_id: str,
+    ) -> str:
+        """Return the default generation for non-persistent caches."""
+        return "0"
