@@ -2,20 +2,15 @@ import re
 import time
 import uuid
 from pathlib import Path
-
 import requests
 import streamlit as st
-
 from app.config.settings import settings
-
-
 st.set_page_config(
     page_title="ContextOps",
     page_icon=str(Path(__file__).with_name("contextops_favicon.png")),
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
 DEFAULT_STATE = {
     "conversation_id": None,
     "messages": [],
@@ -29,15 +24,11 @@ DEFAULT_STATE = {
     "ingestion_ready": False,
     "pending_question": None,
 }
-
 for key, default in DEFAULT_STATE.items():
     if key not in st.session_state:
         st.session_state[key] = default
-
 if st.session_state["conversation_id"] is None:
     st.session_state["conversation_id"] = str(uuid.uuid4())
-
-
 def inject_styles() -> None:
     st.markdown(
         """
@@ -58,11 +49,9 @@ def inject_styles() -> None:
             --ctx-green: #52525B;
             --ctx-green-light: #F5F5F4;
         }
-
         .stApp { background: var(--ctx-bg); color: var(--ctx-text); }
         [data-testid="stHeader"] { background: rgba(250,250,249,.98); }
         [data-testid="stToolbar"] { opacity: .82; }
-
         .block-container {
             width: 100% !important;
             max-width: 1180px !important;
@@ -72,7 +61,6 @@ def inject_styles() -> None:
             padding-bottom: 3rem !important;
             box-sizing: border-box !important;
         }
-
         /* Brand sits safely below Streamlit's header. */
         .ctx-brand {
             display:flex; align-items:center; gap:11px;
@@ -99,7 +87,6 @@ def inject_styles() -> None:
         .ctx-brand > div:last-child {
             min-width:0; opacity:1 !important; visibility:visible !important;
         }
-
         .ctx-card {
             background:var(--ctx-surface); border:1px solid var(--ctx-border);
             border-radius:16px; padding:20px;
@@ -107,7 +94,6 @@ def inject_styles() -> None:
         }
         .ctx-card-title { color:#18181B; font-size:18px; font-weight:800; margin-bottom:4px; }
         .ctx-card-subtitle { color:var(--ctx-muted); font-size:12px; line-height:1.5; margin-bottom:14px; }
-
         [data-testid="stFileUploader"] {
             border:1px dashed #C5A028; border-radius:13px;
             background:#FAFAF9; padding:12px; margin:6px 0 14px;
@@ -136,7 +122,6 @@ def inject_styles() -> None:
             visibility:visible !important;
         }
         [data-testid="stFileUploader"] button { border-radius:8px; font-weight:700; }
-
         /* Unified enterprise controls */
         div[data-testid="stFormSubmitButton"] button,
         div[data-testid="stButton"] button {
@@ -159,11 +144,9 @@ def inject_styles() -> None:
             background:var(--ctx-gold) !important;
             border-color:var(--ctx-gold) !important;
         }
-
         .ctx-home-title { color:#18181B; font-size:22px; font-weight:800; margin:0 0 4px; }
         .ctx-chat-title { color:#18181B; font-size:19px; font-weight:800; margin:4px 0 3px; }
         .ctx-chat-sub { color:var(--ctx-muted); font-size:11px; margin-bottom:12px; }
-
         /* Chat area: continuous flow on desktop */
         .ctx-chat-shell {
             background:transparent !important;
@@ -267,7 +250,6 @@ def inject_styles() -> None:
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] p:last-child {
             padding-bottom:10px !important;
         }
-
         /* Source area is intentionally styled as evidence/citation chips, not large buttons. */
         .ctx-source-label {
             color:#52525B; font-size:9px; font-weight:800;
@@ -282,7 +264,6 @@ def inject_styles() -> None:
             color:#27272A; font-size:10px; font-weight:700;
         }
         .ctx-source-chip::before { content:'↗'; font-size:9px; color:var(--ctx-gold); }
-
         /* Make Streamlit source buttons visually behave like compact citation chips. */
         .ctx-source-row [data-testid="stButton"] button {
             min-height:28px !important;
@@ -302,7 +283,31 @@ def inject_styles() -> None:
             border-color:#C5A028 !important;
             color:#18181B !important;
         }
-
+        /* Source buttons: keep the citation group compact and adjacent.
+           Streamlit columns otherwise stretch across the full answer width. */
+        .ctx-source-row + [data-testid="stHorizontalBlock"] {
+            width:fit-content !important;
+            max-width:100% !important;
+            display:flex !important;
+            flex-wrap:nowrap !important;
+            justify-content:flex-start !important;
+            align-items:center !important;
+            gap:6px !important;
+            margin:0 !important;
+            padding:0 !important;
+        }
+        .ctx-source-row + [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+            flex:0 0 auto !important;
+            width:auto !important;
+            min-width:0 !important;
+            max-width:none !important;
+            padding:0 !important;
+        }
+        .ctx-source-row + [data-testid="stHorizontalBlock"] [data-testid="stButton"] {
+            width:auto !important;
+            min-width:0 !important;
+            margin:0 !important;
+        }
         /* Query composer: normal document flow on desktop. It is deliberately
            NOT Streamlit's st.chat_input because Streamlit positions that
            component as a viewport-level composer, which makes desktop chat
@@ -315,7 +320,6 @@ def inject_styles() -> None:
             border-radius:14px !important;
             box-shadow:0 3px 12px rgba(48,45,40,.035) !important;
         }
-
         /* Deterministic composer sizing: text field takes remaining width,
            send button never escapes the form on narrow screens. */
         [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-testid="stHorizontalBlock"] {
@@ -327,7 +331,6 @@ def inject_styles() -> None:
             gap:.45rem !important;
             box-sizing:border-box !important;
         }
-
         [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-testid="stHorizontalBlock"] > div {
             min-width:0 !important;
             max-width:100% !important;
@@ -371,8 +374,6 @@ def inject_styles() -> None:
             border-radius:10px !important;
             font-size:16px !important;
         }
-
-
         /* Global Streamlit text-input focus cleanup.
            Applies to Home, Q&A and Admin inputs. Streamlit/BaseWeb can add
            a red focus ring/box-shadow on focus; keep the enterprise gold
@@ -394,7 +395,6 @@ def inject_styles() -> None:
             outline: none !important;
             box-shadow: none !important;
         }
-
         [data-testid="stTextInput"] > div:focus-within,
         [data-testid="stTextArea"] > div:focus-within,
         [data-baseweb="input"]:focus-within,
@@ -403,7 +403,6 @@ def inject_styles() -> None:
             outline: none !important;
             box-shadow: 0 0 0 1px #C5A028 !important;
         }
-
         [data-testid="stTextInput"] input:focus,
         [data-testid="stTextInput"] input:focus-visible,
         [data-testid="stTextArea"] textarea:focus,
@@ -418,7 +417,6 @@ def inject_styles() -> None:
             border-color: transparent !important;
             box-shadow: none !important;
         }
-
         /* Remove the browser/BaseWeb red focus ring from the surrounding
            control as well. Do not add a replacement focus ring. */
         [data-testid="stTextInput"]:focus-within,
@@ -433,10 +431,35 @@ def inject_styles() -> None:
             outline: none !important;
             box-shadow: none !important;
         }
-
         .ctx-new-chat-caption { color:var(--ctx-muted); font-size:10px; }
         .ctx-dialog-note { color:var(--ctx-muted); font-size:11px; margin-bottom:10px; }
-
+        /* Source-details dialog: keep the popup inside the viewport and make
+           the evidence content independently scrollable on desktop/mobile. */
+        [role="dialog"] {
+            max-height:calc(100vh - 24px) !important;
+            box-sizing:border-box !important;
+            overflow:hidden !important;
+        }
+        [role="dialog"] > div,
+        [role="dialog"] [data-testid="stVerticalBlockBorderWrapper"],
+        [role="dialog"] [data-testid="stVerticalBlock"] {
+            min-height:0 !important;
+            box-sizing:border-box !important;
+        }
+        [role="dialog"] [data-testid="stCodeBlock"] pre {
+            max-height:none !important;
+            white-space:pre-wrap !important;
+            overflow-wrap:anywhere !important;
+            font-size:12px !important;
+        }
+        @media (max-width:700px) {
+            [role="dialog"] {
+                width:calc(100vw - 20px) !important;
+                max-width:calc(100vw - 20px) !important;
+                max-height:calc(100vh - 16px) !important;
+                margin:8px auto !important;
+            }
+        }
         .ctx-status-card { background:#FAFAF9; border:1px solid var(--ctx-border); border-radius:14px; padding:15px; box-shadow:0 4px 14px rgba(24,24,27,.04); margin:10px 0 15px; }
         .ctx-status-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
         .ctx-status-name { color:#18181B; font-weight:800; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -452,7 +475,6 @@ def inject_styles() -> None:
         .ctx-spin { width:11px; height:11px; border:2px solid #E0C35A; border-top-color:#C5A028; border-radius:50%; animation:ctxspin .8s linear infinite; }
         @keyframes ctxspin { to { transform:rotate(360deg); } }
         .ctx-ready { padding:11px 13px; margin-top:11px; border-radius:10px; background:var(--ctx-green-light); border:1px solid #E0C35A; color:#27272A; font-size:11px; font-weight:800; }
-
         /* Prevent long flex content from shrinking the Streamlit app to a
            narrow desktop-sized column on mobile browsers. */
         html, body, #root {
@@ -463,7 +485,6 @@ def inject_styles() -> None:
             padding:0 !important;
             overflow-x:hidden !important;
         }
-
         [data-testid="stAppViewContainer"],
         [data-testid="stAppViewContainer"] > .main,
         [data-testid="stAppViewContainer"] .main,
@@ -479,13 +500,11 @@ def inject_styles() -> None:
             margin-right:auto !important;
             box-sizing:border-box !important;
         }
-
         .ctx-brand > div:last-child {
             min-width:0 !important;
             max-width:100% !important;
             flex:1 1 auto !important;
         }
-
         @media (max-width: 700px) {
             [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) [data-testid="stChatMessageContent"] {
                 width:fit-content !important;
@@ -495,7 +514,6 @@ def inject_styles() -> None:
                 min-height:0 !important;
                 height:auto !important;
             }
-
             /* ------------------------------------------------------------
                PHONE LAYOUT
                Keep the entire ContextOps page inside the actual viewport.
@@ -503,7 +521,6 @@ def inject_styles() -> None:
                renders forms inside its own layout tree and fixed positioning
                can detach the composer from the phone viewport.
             ------------------------------------------------------------ */
-
             html,
             body,
             #root,
@@ -519,7 +536,6 @@ def inject_styles() -> None:
                 overflow-x: hidden !important;
                 box-sizing: border-box !important;
             }
-
             [data-testid="stAppViewBlockContainer"],
             .stMainBlockContainer,
             .block-container {
@@ -532,7 +548,6 @@ def inject_styles() -> None:
                 box-sizing: border-box !important;
                 overflow-x: visible !important;
             }
-
             /* Every Streamlit layout row must be allowed to shrink. */
             [data-testid="stHorizontalBlock"],
             [data-testid="stVerticalBlock"],
@@ -544,11 +559,9 @@ def inject_styles() -> None:
                 max-width: 100% !important;
                 box-sizing: border-box !important;
             }
-
             [data-testid="stHorizontalBlock"] {
                 width: 100% !important;
             }
-
             /* Brand */
             .ctx-brand {
                 width: 100% !important;
@@ -562,7 +575,6 @@ def inject_styles() -> None:
                 box-sizing: border-box !important;
                 overflow: visible !important;
             }
-
             .ctx-brand-mark {
                 width: 34px !important;
                 height: 34px !important;
@@ -570,14 +582,12 @@ def inject_styles() -> None:
                 font-size: 13px !important;
                 flex: 0 0 34px !important;
             }
-
             .ctx-brand > div:last-child {
                 min-width: 0 !important;
                 width: 0 !important;
                 flex: 1 1 auto !important;
                 overflow: visible !important;
             }
-
             .ctx-brand-name {
                 font-size: 19px !important;
                 line-height: 1.1 !important;
@@ -585,7 +595,6 @@ def inject_styles() -> None:
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
             }
-
             .ctx-brand-subtitle {
                 font-size: 9px !important;
                 line-height: 1.35 !important;
@@ -593,7 +602,6 @@ def inject_styles() -> None:
                 overflow-wrap: anywhere !important;
                 max-width: 100% !important;
             }
-
             /* Home/admin cards stay centered within the phone viewport. */
             .ctx-card,
             [data-testid="stVerticalBlockBorderWrapper"] {
@@ -607,15 +615,12 @@ def inject_styles() -> None:
                 border-radius: 13px !important;
                 overflow: visible !important;
             }
-
             .ctx-card-title {
                 font-size: 16px !important;
             }
-
             .ctx-card-subtitle {
                 font-size: 11px !important;
             }
-
             /* Upload form */
             [data-testid="stFileUploader"],
             [data-testid="stFileUploader"] section,
@@ -632,7 +637,6 @@ def inject_styles() -> None:
                 margin-right: auto !important;
                 box-sizing: border-box !important;
             }
-
             [data-testid="stFileUploaderDropzoneInstructions"] {
                 width: 100% !important;
                 max-width: 100% !important;
@@ -641,7 +645,6 @@ def inject_styles() -> None:
                 text-align: center !important;
                 box-sizing: border-box !important;
             }
-
             /* Q&A header columns must stack naturally instead of creating
                a narrow/hidden second column on small phones. */
             .ctx-chat-title,
@@ -649,7 +652,6 @@ def inject_styles() -> None:
                 max-width: 100% !important;
                 overflow-wrap: anywhere !important;
             }
-
             /* Chat bubbles */
             [data-testid="stChatMessage"] {
                 width: 100% !important;
@@ -657,7 +659,6 @@ def inject_styles() -> None:
                 min-width: 0 !important;
                 box-sizing: border-box !important;
             }
-
             [data-testid="stChatMessageContent"] {
                 max-width: 88% !important;
                 min-width: 0 !important;
@@ -665,12 +666,10 @@ def inject_styles() -> None:
                 overflow-wrap: anywhere !important;
                 word-break: break-word !important;
             }
-
             [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) > div {
                 max-width: 84% !important;
                 min-width: 0 !important;
             }
-
             /* Q&A composer: NORMAL FLOW on mobile.
                This is the important fix for the disappearing/teleporting
                composer seen at 425px wide. */
@@ -695,7 +694,6 @@ def inject_styles() -> None:
                 box-shadow: 0 5px 18px rgba(24,24,27,.08) !important;
                 z-index: auto !important;
             }
-
             [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
             [data-testid="stHorizontalBlock"] {
                 display: grid !important;
@@ -706,35 +704,30 @@ def inject_styles() -> None:
                 gap: .35rem !important;
                 box-sizing: border-box !important;
             }
-
             [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
             [data-testid="stHorizontalBlock"] > div {
                 min-width: 0 !important;
                 max-width: 100% !important;
                 box-sizing: border-box !important;
             }
-
             [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
             [data-testid="stTextInput"] {
                 width: 100% !important;
                 min-width: 0 !important;
                 max-width: 100% !important;
             }
-
             [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
             [data-testid="stTextInput"] input {
                 width: 100% !important;
                 min-width: 0 !important;
                 box-sizing: border-box !important;
             }
-
             [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
             [data-testid="stFormSubmitButton"] {
                 width: auto !important;
                 min-width: 42px !important;
                 max-width: 42px !important;
             }
-
             [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
             [data-testid="stFormSubmitButton"] button {
                 width: 42px !important;
@@ -743,7 +736,6 @@ def inject_styles() -> None:
                 height: 40px !important;
                 padding: 0 !important;
             }
-
             /* Evidence chips */
             .ctx-source-row {
                 width: 100% !important;
@@ -751,12 +743,32 @@ def inject_styles() -> None:
                 overflow-x: auto !important;
                 box-sizing: border-box !important;
             }
-
             .ctx-source-row [data-testid="stButton"] button {
                 width: auto !important;
                 min-width: max-content !important;
             }
-
+            .ctx-source-row + [data-testid="stHorizontalBlock"] {
+                width:fit-content !important;
+                max-width:100% !important;
+                overflow-x:auto !important;
+                display:flex !important;
+                flex-wrap:nowrap !important;
+                justify-content:flex-start !important;
+                gap:5px !important;
+                margin:0 !important;
+                padding:0 !important;
+                scrollbar-width:none !important;
+            }
+            .ctx-source-row + [data-testid="stHorizontalBlock"]::-webkit-scrollbar {
+                display:none !important;
+            }
+            .ctx-source-row + [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+                flex:0 0 auto !important;
+                width:auto !important;
+                min-width:0 !important;
+                max-width:none !important;
+                padding:0 !important;
+            }
             /* Admin tabs can scroll horizontally rather than pushing the
                entire page outside the phone viewport. */
             [data-baseweb="tab-list"] {
@@ -765,11 +777,9 @@ def inject_styles() -> None:
                 overflow-x: auto !important;
                 scrollbar-width: none !important;
             }
-
             [data-baseweb="tab-list"]::-webkit-scrollbar {
                 display: none !important;
             }
-
             code,
             pre,
             [data-testid="stCodeBlock"] {
@@ -778,7 +788,6 @@ def inject_styles() -> None:
                 box-sizing: border-box !important;
             }
         }
-
         @media (max-width: 480px) {
             .block-container {
                 width: calc(100% - 20px) !important;
@@ -787,42 +796,33 @@ def inject_styles() -> None:
                 margin-right:auto !important;
                 padding-top: 3.9rem !important;
             }
-
             .ctx-brand {
                 gap: 8px !important;
                 margin-bottom: 14px !important;
             }
-
             .ctx-brand-mark {
                 width: 32px !important;
                 height: 32px !important;
                 flex-basis: 32px !important;
             }
-
             .ctx-brand-name {
                 font-size: 18px !important;
             }
-
             .ctx-brand-subtitle {
                 font-size: 8.5px !important;
             }
-
             [data-testid="stVerticalBlockBorderWrapper"] {
                 padding: 12px !important;
             }
-
             [data-testid="stChatMessageContent"] {
                 max-width: 91% !important;
                 font-size: 12.5px !important;
             }
         }
-
         </style>
         """,
         unsafe_allow_html=True,
     )
-
-
 def show_request_error(exc: Exception, response=None) -> None:
     if isinstance(exc, requests.HTTPError):
         st.error(f"HTTP error occurred: {exc}")
@@ -835,22 +835,16 @@ def show_request_error(exc: Exception, response=None) -> None:
         st.error(f"Request error: {exc}")
     else:
         st.error(f"Unexpected error: {exc}")
-
-
 def parse_trace_ids(text: str) -> list[str]:
     return [line.strip() for line in text.splitlines() if line.strip()]
-
-
 def render_answer(answer: str, citations: list[dict], message_id: str) -> None:
     if not answer:
         return
-
     # Keep source markers out of the visible answer. Show them as compact
     # clickable chips below the complete answer instead.
     parts = re.split(r"\[SOURCE\s+(\d+)\]", answer)
     clean_parts = []
     source_numbers = []
-
     for index, part in enumerate(parts):
         if index % 2 == 0:
             if part.strip():
@@ -862,21 +856,17 @@ def render_answer(answer: str, citations: list[dict], message_id: str) -> None:
                     source_numbers.append(number)
             except ValueError:
                 pass
-
     clean_answer = "\n\n".join(clean_parts).strip()
     if clean_answer:
         st.markdown(clean_answer)
-
     citation_map = {
         citation.get("source"): citation
         for citation in citations
         if citation.get("source") is not None
     }
-
     valid_sources = [
         number for number in source_numbers if number in citation_map
     ]
-
     if valid_sources:
         st.markdown(
             '<div class="ctx-source-label">Evidence</div>',
@@ -895,39 +885,52 @@ def render_answer(answer: str, citations: list[dict], message_id: str) -> None:
                 ):
                     show_source_details(citation)
         st.markdown('</div>', unsafe_allow_html=True)
-
-
 @st.dialog("Source details", width="small")
+
 def show_source_details(citation: dict) -> None:
-    st.markdown('<div class="ctx-dialog-note">Retrieved evidence used to ground this answer.</div>', unsafe_allow_html=True)
-    code_fields = [
-        ("Document", citation.get("document_id")),
-        ("Version", citation.get("document_version_id")),
-        ("Chunk", citation.get("chunk_id")),
-        ("Retrieval score", citation.get("score")),
-        ("Reranker score", citation.get("reranker_score")),
-        ("Page Nnumber", citation.get("page_numbers")),
-        ("Hierarchy path", citation.get("hierarchy_path")),
-    ]
-    for label, value in code_fields:
-        if value is not None and value != "":
-            st.caption(label)
-            st.code(str(value), language=None)
-    text_fields = [
-        # ("Pages", citation.get("page_numbers")),
-        # ("Content type", citation.get("content_type")),
-        # ("Hierarchy", citation.get("hierarchy_path")),
-    ]
-    for label, value in text_fields:
-        if value:
-            st.caption(label)
-            st.write(value)
-    content = citation.get("content")
-    if content:
-        st.caption("Retrieved content")
-        st.markdown(content)
-
-
+    st.markdown(
+        '<div class="ctx-dialog-note">Retrieved evidence used to ground this answer.</div>',
+        unsafe_allow_html=True,
+    )
+    # The dialog content can be taller than a phone/desktop viewport.  Keep a
+    # dedicated scrollable region so Page numbers, Hierarchy path and content
+    # are always reachable instead of being cut off below the popup.
+    with st.container(height=430, border=False):
+        code_fields = [
+            ("Document", citation.get("document_id")),
+            ("Version", citation.get("document_version_id")),
+            ("Chunk", citation.get("chunk_id")),
+            ("Retrieval score", citation.get("score")),
+            ("Reranker score", citation.get("reranker_score")),
+        ]
+        for label, value in code_fields:
+            if value is not None and value != "":
+                st.caption(label)
+                st.code(str(value), language=None)
+        page_numbers = citation.get("page_numbers")
+        if page_numbers is not None and page_numbers != "":
+            st.caption("Page numbers")
+            if isinstance(page_numbers, (list, tuple)):
+                page_text = ", ".join(str(page) for page in page_numbers)
+            else:
+                page_text = str(page_numbers)
+            st.code(page_text, language=None)
+        hierarchy_path = citation.get("hierarchy_path")
+        if hierarchy_path is not None and hierarchy_path != "":
+            st.caption("Hierarchy path")
+            if isinstance(hierarchy_path, (list, tuple)):
+                hierarchy_text = " → ".join(str(item) for item in hierarchy_path)
+            else:
+                hierarchy_text = str(hierarchy_path)
+            st.code(hierarchy_text, language=None)
+        content_type = citation.get("content_type")
+        if content_type:
+            st.caption("Content type")
+            st.write(str(content_type))
+        content = citation.get("content")
+        if content:
+            st.caption("Retrieved content")
+            st.markdown(content)
 def upload_document(
     uploaded_file,
     document_name: str,
@@ -937,36 +940,27 @@ def upload_document(
     if uploaded_file is None:
         st.warning("Please select a PDF document.")
         return False
-
     if not document_name.strip():
         st.warning("Please enter a document name.")
         return False
-
     if not categories_input.strip():
         st.warning("Please enter at least one category.")
         return False
-
     if not tags_input.strip():
         st.warning("Please enter at least one tag.")
         return False
-
     categories = [x.strip() for x in categories_input.split(",") if x.strip()]
     tags = [x.strip() for x in tags_input.split(",") if x.strip()]
-
     if not categories:
         st.warning("Please enter at least one valid category.")
         return False
-
     if not tags:
         st.warning("Please enter at least one valid tag.")
         return False
-
     form_data = [("document_name", document_name.strip())]
     form_data.extend(("categories", value) for value in categories)
     form_data.extend(("tags", value) for value in tags)
-
     uploaded_file.seek(0)
-
     response = None
     try:
         with st.spinner("Uploading and starting ingestion..."):
@@ -982,10 +976,8 @@ def upload_document(
                 data=form_data,
                 timeout=120,
             )
-
         response.raise_for_status()
         result = response.json()
-
         document_id = result.get("document_id") or result.get("id")
         if not document_id:
             try:
@@ -1005,8 +997,6 @@ def upload_document(
     except Exception as exc:
         show_request_error(exc, response)
         return False
-
-
 def fetch_documents() -> list[dict]:
     response = requests.get(
         f"{settings.api_base_url}/api/v1/documents",
@@ -1014,27 +1004,20 @@ def fetch_documents() -> list[dict]:
     )
     response.raise_for_status()
     return response.json().get("documents", [])
-
-
 def ask_question(question: str) -> None:
     normalized_question = question.strip()
-
     if not normalized_question:
         st.warning("Please enter a question.")
         return
-
     st.session_state["messages"].append(
         {"role": "user", "content": normalized_question}
     )
-
     payload = {
         "query": normalized_question,
         "tenant_id": settings.default_tenant_id,
         "conversation_id": st.session_state["conversation_id"],
     }
-
     response = None
-
     try:
         with st.spinner("Searching the knowledge base..."):
             response = requests.post(
@@ -1042,10 +1025,8 @@ def ask_question(question: str) -> None:
                 json=payload,
                 timeout=120,
             )
-
         response.raise_for_status()
         result = response.json()
-
         st.session_state["messages"].append(
             {
                 "role": "assistant",
@@ -1054,20 +1035,14 @@ def ask_question(question: str) -> None:
                 "metadata": result.get("metadata", {}),
             }
         )
-
         backend_conversation_id = result.get("conversation_id")
         if backend_conversation_id:
             st.session_state["conversation_id"] = backend_conversation_id
-
         st.rerun()
-
     except Exception as exc:
         show_request_error(exc, response)
-
-
 def render_chat() -> None:
     header_left, header_right = st.columns([7, 1.4], vertical_alignment="center")
-
     with header_left:
         st.markdown(
             '<div class="ctx-chat-title">Ask your document</div>',
@@ -1077,7 +1052,6 @@ def render_chat() -> None:
             '<div class="ctx-chat-sub">Grounded answers from your uploaded policy.</div>',
             unsafe_allow_html=True,
         )
-
     with header_right:
         if st.session_state["messages"]:
             if st.button(
@@ -1089,13 +1063,10 @@ def render_chat() -> None:
                 st.session_state["messages"] = []
                 st.session_state["selected_source"] = None
                 st.rerun()
-
     st.markdown('<div class="ctx-chat-shell">', unsafe_allow_html=True)
-
     for index, message in enumerate(st.session_state["messages"]):
         role = message.get("role")
         content = message.get("content", "")
-
         with st.chat_message(role):
             if role == "assistant":
                 render_answer(
@@ -1105,9 +1076,7 @@ def render_chat() -> None:
                 )
             else:
                 st.markdown(content)
-
     st.markdown("</div>", unsafe_allow_html=True)
-
     # Keep the composer inside the conversation flow on both desktop and mobile.
     # This avoids Streamlit fixed-position layout issues on narrow mobile viewports.
     with st.form("query_composer", clear_on_submit=True, border=False):
@@ -1120,7 +1089,6 @@ def render_chat() -> None:
             )
         with composer_send:
             submitted = st.form_submit_button("↑", type="primary")
-
     if submitted and question:
         # Persist the user message first, then rerun. This makes the
         # submitted question visible immediately, before the backend call.
@@ -1131,18 +1099,15 @@ def render_chat() -> None:
             )
             st.session_state["pending_question"] = normalized_question
             st.rerun()
-
     # The next run renders the persisted user bubble before making the API call.
     pending_question = st.session_state.get("pending_question")
     if pending_question:
         st.session_state["pending_question"] = None
-
         payload = {
             "query": pending_question,
             "tenant_id": settings.default_tenant_id,
             "conversation_id": st.session_state["conversation_id"],
         }
-
         response = None
         try:
             with st.spinner("Searching the knowledge base..."):
@@ -1151,10 +1116,8 @@ def render_chat() -> None:
                     json=payload,
                     timeout=120,
                 )
-
             response.raise_for_status()
             result = response.json()
-
             st.session_state["messages"].append(
                 {
                     "role": "assistant",
@@ -1163,17 +1126,12 @@ def render_chat() -> None:
                     "metadata": result.get("metadata", {}),
                 }
             )
-
             backend_conversation_id = result.get("conversation_id")
             if backend_conversation_id:
                 st.session_state["conversation_id"] = backend_conversation_id
-
             st.rerun()
-
         except Exception as exc:
             show_request_error(exc, response)
-
-
 def get_document_status(document_id: str | None) -> str:
     if not document_id:
         return "PROCESSING"
@@ -1183,10 +1141,7 @@ def get_document_status(document_id: str | None) -> str:
         if str(document.get("document_id")) == str(document_id):
             return str(document.get("status") or "PROCESSING").upper()
     return "PROCESSING"
-
-
 DOCUMENT_STATUS_POLL_SECONDS = 2
-
 
 def render_ingestion_status(document_id: str | None, document_name: str) -> bool:
     status_placeholder = st.empty()
@@ -1228,15 +1183,11 @@ def render_ingestion_status(document_id: str | None, document_name: str) -> bool
         time.sleep(DOCUMENT_STATUS_POLL_SECONDS)
     status_placeholder.warning("Processing is taking longer than expected. Refresh to check again.")
     return False
-
-
 def generate_golden_dataset(trace_ids: list[str]) -> None:
     if not trace_ids:
         st.warning("Please enter at least one Langfuse trace ID.")
         return
-
     response = None
-
     try:
         with st.spinner("Generating golden dataset and source candidates..."):
             response = requests.post(
@@ -1244,39 +1195,28 @@ def generate_golden_dataset(trace_ids: list[str]) -> None:
                 json={"trace_ids": trace_ids},
                 timeout=300,
             )
-
         response.raise_for_status()
         result = response.json()
-
         example_count = result.get("example_count", 0)
         candidate_count = result.get("candidate_count", 0)
-
         st.success(
             f"Golden dataset generated successfully. "
             f"{example_count} examples processed."
         )
-
         st.write(f"**Golden examples:** {example_count}")
         st.write(f"**Source candidate sets:** {candidate_count}")
-
         if result.get("golden_dataset_file"):
             st.write("**Golden dataset file**")
             st.code(result["golden_dataset_file"])
-
         if result.get("golden_source_candidates_file"):
             st.write("**Source candidates file**")
             st.code(result["golden_source_candidates_file"])
-
         with st.expander("View generated golden dataset"):
             st.json(result.get("golden_dataset", []))
-
         with st.expander("View generated source candidates"):
             st.json(result.get("source_candidates", []))
-
     except Exception as exc:
         show_request_error(exc, response)
-
-
 def render_upload_card(form_key: str, file_key: str | None = None) -> bool:
     with st.form(form_key):
         uploaded_file = st.file_uploader(
@@ -1285,39 +1225,31 @@ def render_upload_card(form_key: str, file_key: str | None = None) -> bool:
             key=file_key,
             label_visibility="collapsed",
         )
-
         document_name = st.text_input(
             "Document name",
             placeholder="e.g. Personal Loan Policy",
         )
-
         categories = st.text_input(
             "Categories *",
             placeholder="e.g. Loans, Personal Loan",
         )
-
         tags = st.text_input(
             "Tags *",
             placeholder="e.g. interest-rate, eligibility",
         )
-
         upload_clicked = st.form_submit_button(
             "Upload Document",
             use_container_width=True,
             type="primary",
         )
-
     if not upload_clicked:
         return False
-
     return upload_document(
         uploaded_file,
         document_name,
         categories,
         tags,
     )
-
-
 def home_page() -> None:
     inject_styles()
     st.markdown('<div class="ctx-brand"><div class="ctx-brand-mark">C</div><div><div class="ctx-brand-name">ContextOps</div><div class="ctx-brand-subtitle">Policy intelligence · Multimodal extraction · Text · Diagrams · Charts · Images</div></div></div>', unsafe_allow_html=True)
@@ -1337,11 +1269,8 @@ def home_page() -> None:
             st.rerun()
         return
     render_chat()
-
-
 def admin_page() -> None:
     inject_styles()
-
     st.markdown(
         """
         <div class="ctx-brand">
@@ -1351,7 +1280,6 @@ def admin_page() -> None:
                 <div class="ctx-brand-subtitle">Enterprise Policy Intelligence</div>
             </div>
         </div>
-
         <div class="ctx-admin-bar">
             <h1>Administration</h1>
             <p>
@@ -1362,7 +1290,6 @@ def admin_page() -> None:
         """,
         unsafe_allow_html=True,
     )
-
     upload_tab, update_tab, evaluation_tab, documents_tab = st.tabs(
         [
             "Upload Document",
@@ -1371,7 +1298,6 @@ def admin_page() -> None:
             "Active Documents",
         ]
     )
-
     with upload_tab:
         st.markdown(
             '<div class="ctx-card-title">Upload a new document</div>'
@@ -1380,22 +1306,18 @@ def admin_page() -> None:
             "</div>",
             unsafe_allow_html=True,
         )
-
         uploaded = render_upload_card(
             "admin_upload_document_form",
             file_key="admin_upload_file",
         )
-
         if uploaded:
             st.rerun()
-
     with update_tab:
         try:
             documents = fetch_documents()
         except Exception as exc:
             show_request_error(exc)
             documents = []
-
         if not documents:
             st.info("No active documents available.")
         else:
@@ -1404,37 +1326,31 @@ def admin_page() -> None:
                 f"v{doc.get('current_version', 'N/A')}": doc
                 for doc in documents
             }
-
             selected_label = st.selectbox(
                 "Document",
                 list(options.keys()),
             )
             selected = options[selected_label]
-
             st.caption(
                 f"Document ID: {selected.get('document_id', 'N/A')}"
             )
-
             with st.form("admin_update_version_form"):
                 version_file = st.file_uploader(
                     "New PDF version",
                     type=["pdf"],
                     key=f"admin_version_{selected['document_id']}",
                 )
-
                 update_clicked = st.form_submit_button(
                     "Upload New Version",
                     use_container_width=True,
                     type="primary",
                 )
-
             if update_clicked:
                 if version_file is None:
                     st.warning("Please select the updated PDF document.")
                 else:
                     version_file.seek(0)
                     response = None
-
                     try:
                         with st.spinner("Uploading new version..."):
                             response = requests.post(
@@ -1449,19 +1365,15 @@ def admin_page() -> None:
                                 },
                                 timeout=120,
                             )
-
                         response.raise_for_status()
                         result = response.json()
-
                         st.success(
                             f"Version {result.get('version', 'new')} "
                             "uploaded successfully."
                         )
                         st.rerun()
-
                     except Exception as exc:
                         show_request_error(exc, response)
-
     with evaluation_tab:
         st.markdown(
             '<div class="ctx-card-title">Generate golden dataset</div>'
@@ -1470,66 +1382,53 @@ def admin_page() -> None:
             "</div>",
             unsafe_allow_html=True,
         )
-
         st.text_area(
             "Langfuse Trace IDs",
             key="golden_trace_ids",
             placeholder="One trace ID per line",
             height=180,
         )
-
         trace_ids = parse_trace_ids(
             st.session_state["golden_trace_ids"]
         )
-
         st.caption(f"{len(trace_ids)} trace ID(s) configured.")
-
         if st.button(
             "Generate Golden Dataset",
             use_container_width=True,
             type="primary",
         ):
             generate_golden_dataset(trace_ids)
-
     with documents_tab:
         try:
             documents = fetch_documents()
         except Exception as exc:
             show_request_error(exc)
             documents = []
-
         if not documents:
             st.info("No active documents uploaded.")
         else:
             st.write(f"**{len(documents)} active document(s)**")
-
             for document in documents:
                 name = document.get("document_name", "Unnamed Document")
                 version = document.get("current_version", "N/A")
                 categories = document.get("categories", [])
                 tags = document.get("tags", [])
-
                 with st.container(border=True):
                     st.markdown(
                         f"**{name}**  \n"
                         f"Version: **v{version}**"
                     )
-
                     if categories:
                         st.caption(
                             "Categories: " + ", ".join(categories)
                         )
-
                     if tags:
                         st.caption(
                             "Tags: " + ", ".join(tags)
                         )
-
-
 pages = [
     st.Page(home_page, title="Home", url_path="", default=True),
     st.Page(admin_page, title="Admin", url_path="admin"),
 ]
-
 navigation = st.navigation(pages, position="hidden")
 navigation.run()
