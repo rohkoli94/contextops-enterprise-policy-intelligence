@@ -85,12 +85,12 @@ def create_timed_node(
             logger.info(
                 "\n"
                 "============================================================\n"
-                "ðŸ¤– NODE STARTED: llm_generation\n"
+                "NODE STARTED: llm_generation\n"
                 "============================================================"
             )
         else:
             logger.info(
-                "â–¶ NODE STARTED: %s",
+                "NODE STARTED: %s",
                 name,
             )
 
@@ -116,14 +116,14 @@ def create_timed_node(
                 logger.info(
                     "\n"
                     "============================================================\n"
-                    "ðŸ¤– NODE COMPLETED: llm_generation\n"
-                    "â± duration_ms=%.3f\n"
+                    "NODE COMPLETED: llm_generation\n"
+                    "duration_ms=%.3f\n"
                     "============================================================",
                     elapsed_ms,
                 )
             else:
                 logger.info(
-                    "âœ“ NODE COMPLETED: %s | "
+                    "NODE COMPLETED: %s | "
                     "duration_ms=%.3f",
                     name,
                     elapsed_ms,

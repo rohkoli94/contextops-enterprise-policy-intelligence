@@ -56,11 +56,7 @@ def create_query_contextualization_node(
         # DETERMINE WHETHER CONTEXT EXISTS
         # ====================================================
 
-        has_conversation_context = (
-            bool(conversation_id)
-            or bool(conversation_summary)
-            or bool(recent_messages)
-        )
+        has_conversation_context = (bool(conversation_summary))
 
         # ====================================================
         # STANDALONE QUERY

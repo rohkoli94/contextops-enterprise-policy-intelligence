@@ -64,9 +64,13 @@ def inject_styles() -> None:
         [data-testid="stToolbar"] { opacity: .82; }
 
         .block-container {
-            max-width: 1180px;
+            width: 100% !important;
+            max-width: 1180px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
             padding-top: 4.25rem !important;
-            padding-bottom: 3rem;
+            padding-bottom: 3rem !important;
+            box-sizing: border-box !important;
         }
 
         /* Brand sits safely below Streamlit's header. */
@@ -223,9 +227,37 @@ def inject_styles() -> None:
             color:#343536 !important;
             border-bottom-left-radius:5px !important;
             box-shadow:0 2px 8px rgba(24,24,27,.04) !important;
+            display:block !important;
+            width:fit-content !important;
+            min-height:0 !important;
+            height:auto !important;
+            padding:12px 15px 13px !important;
+            line-height:1.55 !important;
+            box-sizing:border-box !important;
+            vertical-align:top !important;
         }
-        [data-testid="stChatMessageContent"] p { margin:0 0 .48rem !important; color:inherit !important; }
-        [data-testid="stChatMessageContent"] p:last-child { margin-bottom:0 !important; }
+        [data-testid="stChatMessageContent"] [data-testid="stMarkdownContainer"] {
+            margin:0 !important;
+            padding:0 !important;
+            min-height:0 !important;
+            height:auto !important;
+        }
+        [data-testid="stChatMessageContent"] p {
+            margin:0 !important;
+            padding:0 !important;
+            color:inherit !important;
+            line-height:1.55 !important;
+            min-height:0 !important;
+        }
+        [data-testid="stChatMessageContent"] p:last-child {
+            margin-bottom:0 !important;
+            padding-bottom:0 !important;
+        }
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) [data-testid="stChatMessageContent"] p {
+            margin:0 !important;
+            padding:0 !important;
+            line-height:1.55 !important;
+        }
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] p {
             line-height:1.45 !important;
             margin:0 !important;
@@ -282,6 +314,24 @@ def inject_styles() -> None:
             border:1px solid var(--ctx-border) !important;
             border-radius:14px !important;
             box-shadow:0 3px 12px rgba(48,45,40,.035) !important;
+        }
+
+        /* Deterministic composer sizing: text field takes remaining width,
+           send button never escapes the form on narrow screens. */
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-testid="stHorizontalBlock"] {
+            display:grid !important;
+            grid-template-columns:minmax(0, 1fr) 44px !important;
+            width:100% !important;
+            min-width:0 !important;
+            max-width:100% !important;
+            gap:.45rem !important;
+            box-sizing:border-box !important;
+        }
+
+        [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-testid="stHorizontalBlock"] > div {
+            min-width:0 !important;
+            max-width:100% !important;
+            box-sizing:border-box !important;
         }
         [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) [data-testid="stTextInput"] input {
             min-height:40px !important;
@@ -403,55 +453,370 @@ def inject_styles() -> None:
         @keyframes ctxspin { to { transform:rotate(360deg); } }
         .ctx-ready { padding:11px 13px; margin-top:11px; border-radius:10px; background:var(--ctx-green-light); border:1px solid #E0C35A; color:#27272A; font-size:11px; font-weight:800; }
 
-        @media(max-width:700px) {
-            /* Keep the brand safely below Streamlit's native mobile header. */
-            .block-container { padding:4.15rem .65rem 5.5rem !important; }
-            .ctx-brand {
-                display:flex !important;
-                align-items:center !important;
-                flex-wrap:nowrap !important;
-                margin:0 0 16px !important;
-                min-height:40px !important;
-                opacity:1 !important; visibility:visible !important;
-            }
-            .ctx-brand-mark { width:36px; height:36px; border-radius:9px; font-size:14px; flex:0 0 36px; }
-            .ctx-brand-name {
-                font-size:20px !important;
-                color:#18181B !important;
-                opacity:1 !important; visibility:visible !important;
-                display:block !important;
-                white-space:nowrap !important;
-            }
-            .ctx-brand-subtitle {
-                font-size:9px !important;
-                color:#52525B !important;
-                opacity:1 !important; visibility:visible !important;
-                display:block !important;
-                white-space:nowrap !important;
-            }
-            .ctx-card { padding:14px; border-radius:13px; overflow:visible !important; }
-            .ctx-brand-name, .ctx-brand-subtitle { overflow:visible !important; text-overflow:clip !important; }
-            .ctx-card-title { font-size:16px; }
-            .ctx-home-title { font-size:20px; }
-            [data-testid="stChatMessageContent"] { max-width:89% !important; font-size:13px !important; }
-            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) > div {
-                max-width:82% !important;
-            }
-            /* On phones the composer follows the familiar mobile chat pattern
-               and stays available at the bottom. Desktop remains in flow. */
-            [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) {
-                position:fixed !important;
-                left:.65rem !important; right:.65rem !important; bottom:.65rem !important;
-                width:auto !important; margin:0 !important;
-                padding:.45rem !important;
-                background:#FAFAF9 !important;
-                border:1px solid var(--ctx-border) !important;
-                border-radius:13px !important;
-                box-shadow:0 8px 25px rgba(24,24,27,.12) !important;
-                z-index:999 !important;
-            }
-            .ctx-source-row [data-testid="stButton"] button { width:auto !important; }
+        /* Prevent long flex content from shrinking the Streamlit app to a
+           narrow desktop-sized column on mobile browsers. */
+        html, body, #root {
+            width:100% !important;
+            min-width:0 !important;
+            max-width:100% !important;
+            margin:0 !important;
+            padding:0 !important;
+            overflow-x:hidden !important;
         }
+
+        [data-testid="stAppViewContainer"],
+        [data-testid="stAppViewContainer"] > .main,
+        [data-testid="stAppViewContainer"] .main,
+        [data-testid="stAppViewBlockContainer"],
+        section.main,
+        section.main > div,
+        .stMainBlockContainer,
+        .block-container {
+            width:calc(100% - 40px) !important;
+            min-width:0 !important;
+            max-width:980px !important;
+            margin-left:auto !important;
+            margin-right:auto !important;
+            box-sizing:border-box !important;
+        }
+
+        .ctx-brand > div:last-child {
+            min-width:0 !important;
+            max-width:100% !important;
+            flex:1 1 auto !important;
+        }
+
+        @media (max-width: 700px) {
+            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) [data-testid="stChatMessageContent"] {
+                width:fit-content !important;
+                max-width:92% !important;
+                padding:11px 13px 12px !important;
+                display:block !important;
+                min-height:0 !important;
+                height:auto !important;
+            }
+
+            /* ------------------------------------------------------------
+               PHONE LAYOUT
+               Keep the entire ContextOps page inside the actual viewport.
+               Do NOT use fixed positioning for the Q&A composer: Streamlit
+               renders forms inside its own layout tree and fixed positioning
+               can detach the composer from the phone viewport.
+            ------------------------------------------------------------ */
+
+            html,
+            body,
+            #root,
+            [data-testid="stAppViewContainer"],
+            [data-testid="stAppViewContainer"] > .main,
+            [data-testid="stAppViewContainer"] .main,
+            section.main {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow-x: hidden !important;
+                box-sizing: border-box !important;
+            }
+
+            [data-testid="stAppViewBlockContainer"],
+            .stMainBlockContainer,
+            .block-container {
+                width: calc(100% - 24px) !important;
+                min-width: 0 !important;
+                max-width: 680px !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+                padding: 4.1rem 0 2rem !important;
+                box-sizing: border-box !important;
+                overflow-x: visible !important;
+            }
+
+            /* Every Streamlit layout row must be allowed to shrink. */
+            [data-testid="stHorizontalBlock"],
+            [data-testid="stVerticalBlock"],
+            [data-testid="stLayoutWrapper"],
+            [data-testid="stElementContainer"],
+            [data-testid="stVerticalBlockBorderWrapper"],
+            [data-testid="stForm"] {
+                min-width: 0 !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            [data-testid="stHorizontalBlock"] {
+                width: 100% !important;
+            }
+
+            /* Brand */
+            .ctx-brand {
+                width: 100% !important;
+                max-width: 100% !important;
+                display: flex !important;
+                align-items: flex-start !important;
+                flex-wrap: nowrap !important;
+                gap: 9px !important;
+                margin: 0 0 16px !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+                overflow: visible !important;
+            }
+
+            .ctx-brand-mark {
+                width: 34px !important;
+                height: 34px !important;
+                border-radius: 9px !important;
+                font-size: 13px !important;
+                flex: 0 0 34px !important;
+            }
+
+            .ctx-brand > div:last-child {
+                min-width: 0 !important;
+                width: 0 !important;
+                flex: 1 1 auto !important;
+                overflow: visible !important;
+            }
+
+            .ctx-brand-name {
+                font-size: 19px !important;
+                line-height: 1.1 !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+
+            .ctx-brand-subtitle {
+                font-size: 9px !important;
+                line-height: 1.35 !important;
+                white-space: normal !important;
+                overflow-wrap: anywhere !important;
+                max-width: 100% !important;
+            }
+
+            /* Home/admin cards stay centered within the phone viewport. */
+            .ctx-card,
+            [data-testid="stVerticalBlockBorderWrapper"] {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+                box-sizing: border-box !important;
+                padding: 14px !important;
+                border-radius: 13px !important;
+                overflow: visible !important;
+            }
+
+            .ctx-card-title {
+                font-size: 16px !important;
+            }
+
+            .ctx-card-subtitle {
+                font-size: 11px !important;
+            }
+
+            /* Upload form */
+            [data-testid="stFileUploader"],
+            [data-testid="stFileUploader"] section,
+            [data-testid="stFileUploaderDropzone"],
+            [data-testid="stFileUploaderDropzone"] > div,
+            [data-testid="stTextInput"],
+            [data-testid="stTextArea"],
+            [data-testid="stForm"],
+            [data-testid="stFormSubmitButton"] {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+                box-sizing: border-box !important;
+            }
+
+            [data-testid="stFileUploaderDropzoneInstructions"] {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+                overflow: hidden !important;
+                text-align: center !important;
+                box-sizing: border-box !important;
+            }
+
+            /* Q&A header columns must stack naturally instead of creating
+               a narrow/hidden second column on small phones. */
+            .ctx-chat-title,
+            .ctx-chat-sub {
+                max-width: 100% !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            /* Chat bubbles */
+            [data-testid="stChatMessage"] {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+            }
+
+            [data-testid="stChatMessageContent"] {
+                max-width: 88% !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+                overflow-wrap: anywhere !important;
+                word-break: break-word !important;
+            }
+
+            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) > div {
+                max-width: 84% !important;
+                min-width: 0 !important;
+            }
+
+            /* Q&A composer: NORMAL FLOW on mobile.
+               This is the important fix for the disappearing/teleporting
+               composer seen at 425px wide. */
+            [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."]) {
+                position: static !important;
+                left: auto !important;
+                right: auto !important;
+                top: auto !important;
+                bottom: auto !important;
+                transform: none !important;
+                float: none !important;
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+                margin: 16px auto 0 !important;
+                padding: 7px !important;
+                box-sizing: border-box !important;
+                background: #FAFAF9 !important;
+                border: 1px solid var(--ctx-border) !important;
+                border-radius: 13px !important;
+                box-shadow: 0 5px 18px rgba(24,24,27,.08) !important;
+                z-index: auto !important;
+            }
+
+            [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
+            [data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) 42px !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                gap: .35rem !important;
+                box-sizing: border-box !important;
+            }
+
+            [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
+            [data-testid="stHorizontalBlock"] > div {
+                min-width: 0 !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
+            [data-testid="stTextInput"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+            }
+
+            [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
+            [data-testid="stTextInput"] input {
+                width: 100% !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+            }
+
+            [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
+            [data-testid="stFormSubmitButton"] {
+                width: auto !important;
+                min-width: 42px !important;
+                max-width: 42px !important;
+            }
+
+            [data-testid="stForm"]:has(input[placeholder="Ask a question about your document..."])
+            [data-testid="stFormSubmitButton"] button {
+                width: 42px !important;
+                min-width: 42px !important;
+                max-width: 42px !important;
+                height: 40px !important;
+                padding: 0 !important;
+            }
+
+            /* Evidence chips */
+            .ctx-source-row {
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: auto !important;
+                box-sizing: border-box !important;
+            }
+
+            .ctx-source-row [data-testid="stButton"] button {
+                width: auto !important;
+                min-width: max-content !important;
+            }
+
+            /* Admin tabs can scroll horizontally rather than pushing the
+               entire page outside the phone viewport. */
+            [data-baseweb="tab-list"] {
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: auto !important;
+                scrollbar-width: none !important;
+            }
+
+            [data-baseweb="tab-list"]::-webkit-scrollbar {
+                display: none !important;
+            }
+
+            code,
+            pre,
+            [data-testid="stCodeBlock"] {
+                max-width: 100% !important;
+                overflow-x: auto !important;
+                box-sizing: border-box !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .block-container {
+                width: calc(100% - 20px) !important;
+                max-width: 460px !important;
+                margin-left:auto !important;
+                margin-right:auto !important;
+                padding-top: 3.9rem !important;
+            }
+
+            .ctx-brand {
+                gap: 8px !important;
+                margin-bottom: 14px !important;
+            }
+
+            .ctx-brand-mark {
+                width: 32px !important;
+                height: 32px !important;
+                flex-basis: 32px !important;
+            }
+
+            .ctx-brand-name {
+                font-size: 18px !important;
+            }
+
+            .ctx-brand-subtitle {
+                font-size: 8.5px !important;
+            }
+
+            [data-testid="stVerticalBlockBorderWrapper"] {
+                padding: 12px !important;
+            }
+
+            [data-testid="stChatMessageContent"] {
+                max-width: 91% !important;
+                font-size: 12.5px !important;
+            }
+        }
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -541,15 +906,17 @@ def show_source_details(citation: dict) -> None:
         ("Chunk", citation.get("chunk_id")),
         ("Retrieval score", citation.get("score")),
         ("Reranker score", citation.get("reranker_score")),
+        ("Page Nnumber", citation.get("page_numbers")),
+        ("Hierarchy path", citation.get("hierarchy_path")),
     ]
     for label, value in code_fields:
         if value is not None and value != "":
             st.caption(label)
             st.code(str(value), language=None)
     text_fields = [
-        ("Pages", citation.get("page_numbers")),
-        ("Content type", citation.get("content_type")),
-        ("Hierarchy", citation.get("hierarchy_path")),
+        # ("Pages", citation.get("page_numbers")),
+        # ("Content type", citation.get("content_type")),
+        # ("Hierarchy", citation.get("hierarchy_path")),
     ]
     for label, value in text_fields:
         if value:
@@ -741,8 +1108,8 @@ def render_chat() -> None:
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Keep the composer inside the conversation flow on desktop.
-    # On mobile CSS moves only this form to the bottom of the viewport.
+    # Keep the composer inside the conversation flow on both desktop and mobile.
+    # This avoids Streamlit fixed-position layout issues on narrow mobile viewports.
     with st.form("query_composer", clear_on_submit=True, border=False):
         composer_left, composer_send = st.columns([12, 0.8], vertical_alignment="center")
         with composer_left:
@@ -818,6 +1185,9 @@ def get_document_status(document_id: str | None) -> str:
     return "PROCESSING"
 
 
+DOCUMENT_STATUS_POLL_SECONDS = 2
+
+
 def render_ingestion_status(document_id: str | None, document_name: str) -> bool:
     status_placeholder = st.empty()
     started = time.time()
@@ -827,7 +1197,7 @@ def render_ingestion_status(document_id: str | None, document_name: str) -> bool
             status = get_document_status(document_id)
         except Exception:
             status_placeholder.warning("Checking document processing status…")
-            time.sleep(2)
+            time.sleep(DOCUMENT_STATUS_POLL_SECONDS)
             continue
         if status in {"FAILED", "ERROR"}:
             status_placeholder.error("Document processing failed. Please try again.")
@@ -839,7 +1209,7 @@ def render_ingestion_status(document_id: str | None, document_name: str) -> bool
             active_stage = min(5, max(1, int((time.time() - started) // 3) + 1))
         else:
             active_stage = 1
-        stages = ["Text extraction completed", "Chunking completed", "Vector DB updated", "Document version activated", "Document processing completed", "Document ready"]
+        stages = ["Multimodal extraction completed", "Chunking completed", "Vector DB updated", "Document version activated", "Document processing completed", "Document ready"]
         rows=[]
         for idx,label in enumerate(stages,1):
             if idx < active_stage or active_stage == 6:
@@ -855,7 +1225,7 @@ def render_ingestion_status(document_id: str | None, document_name: str) -> bool
         status_placeholder.markdown(html, unsafe_allow_html=True)
         if ready:
             return True
-        time.sleep(2)
+        time.sleep(DOCUMENT_STATUS_POLL_SECONDS)
     status_placeholder.warning("Processing is taking longer than expected. Refresh to check again.")
     return False
 
@@ -950,7 +1320,7 @@ def render_upload_card(form_key: str, file_key: str | None = None) -> bool:
 
 def home_page() -> None:
     inject_styles()
-    st.markdown('<div class="ctx-brand"><div class="ctx-brand-mark">C</div><div><div class="ctx-brand-name">ContextOps</div><div class="ctx-brand-subtitle">Policy intelligence · Multimodal extraction · Text · Tables · Diagrams · Charts · Images</div></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="ctx-brand"><div class="ctx-brand-mark">C</div><div><div class="ctx-brand-name">ContextOps</div><div class="ctx-brand-subtitle">Policy intelligence · Multimodal extraction · Text · Diagrams · Charts · Images</div></div></div>', unsafe_allow_html=True)
     if not st.session_state["user_has_uploaded_document"]:
         with st.container(border=True):
             st.markdown('<div class="ctx-card-title">Upload PDF</div>', unsafe_allow_html=True)

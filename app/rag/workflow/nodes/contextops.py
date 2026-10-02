@@ -598,6 +598,8 @@ async def _build_source_block(
         "reranker_score": (
             reranker_score
         ),
+        "page_numbers": metadata.get("page_numbers"),
+        "hierarchy_path": metadata.get("hierarchy_path"),
     }
 
     return (
